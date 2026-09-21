@@ -1,0 +1,6 @@
+{
+  "name": "대명엘리베이터",
+  "description": "승강기 주요 업무 바로가기, 구글 스프레드시트 DB 실시간 추출 조회 및 검사·점검 일정 포털",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
