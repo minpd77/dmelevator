@@ -74,4 +74,5 @@ export interface ElevatorRecord {
   technicianPrimary: string; // 점검정 (담당 기사)
   technicianSecondary: string; // 점검보조 (부 기사)
   deadlineDate: string; // AT열 마감 날짜 (예: 2026-09-25)
+  inspectionScheduledDateTime?: string; // 점검표TO캘린더 검사정리 연동 검사일시
 }

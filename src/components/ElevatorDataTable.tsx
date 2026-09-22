@@ -46,8 +46,11 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedArea, setSelectedArea] = useState<'ALL' | '강남' | '강북' | '경기'>('ALL');
-  // Sort by deadline ascending by default ("최신순으로 점점 멀리날짜로")
-  const [sortOrder, setSortOrder] = useState<'DEADLINE_ASC' | 'DEADLINE_DESC' | 'ORIGINAL'>('DEADLINE_ASC');
+  const [selectedInspectionType, setSelectedInspectionType] = useState<string>('ALL');
+  // Sort options: deadline, inspection date/time, or original
+  const [sortOrder, setSortOrder] = useState<
+    'DEADLINE_ASC' | 'DEADLINE_DESC' | 'INSPECTION_ASC' | 'INSPECTION_DESC' | 'ORIGINAL'
+  >('DEADLINE_ASC');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [selectedRecord, setSelectedRecord] = useState<ElevatorRecord | null>(null);
@@ -81,9 +84,24 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
     };
   }, [records]);
 
+  // Unique inspection types list
+  const inspectionTypes = useMemo(() => {
+    const set = new Set<string>();
+    records.forEach((r) => {
+      const t = String(r?.inspectionType || '').trim();
+      if (t) set.add(t);
+    });
+    return Array.from(set).sort();
+  }, [records]);
+
   // Count records with deadline
   const deadlineCount = useMemo(() => {
     return records.filter((r) => Boolean(r?.deadlineDate && String(r.deadlineDate).trim())).length;
+  }, [records]);
+
+  // Count records with inspection date
+  const inspectionDateCount = useMemo(() => {
+    return records.filter((r) => Boolean(r?.inspectionDate && String(r.inspectionDate).trim())).length;
   }, [records]);
 
   // Helper to remove all whitespace and lowercase for space-insensitive search
@@ -91,15 +109,33 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
     return String(str || '').replace(/\s+/g, '').toLowerCase();
   };
 
+  // Helper to check if inspectionDate has both date and time (e.g. "2026-09-15 14:00" or "09/15 14:00" or has hours:minutes like "14:00" or "9:30")
+  const hasInspectionTime = (str: string | undefined | null): boolean => {
+    if (!str) return false;
+    const trimmed = str.trim();
+    if (!trimmed) return false;
+    // Check for presence of time pattern like HH:mm (e.g., 14:00, 9:30, 09:30)
+    // and a date component
+    return /\b\d{1,2}:\d{2}\b/.test(trimmed);
+  };
+
   // Filter and sort logic
   const filteredAndSortedRecords = useMemo(() => {
-    // 1. Filter by area: 전체현장, 강남, 강북, 경기
-    const filtered = records.filter((rec) => {
+    // 1. Filter by area & inspection type
+    let filtered = records.filter((rec) => {
       if (!rec) return false;
       const recArea = String(rec.area || '');
 
       if (selectedArea !== 'ALL') {
         if (!recArea.includes(selectedArea)) {
+          return false;
+        }
+      }
+
+      // Filter by inspection type (정기, 정밀, 수시 등)
+      if (selectedInspectionType !== 'ALL') {
+        const recType = String(rec.inspectionType || '').trim();
+        if (recType !== selectedInspectionType) {
           return false;
         }
       }
@@ -174,7 +210,7 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
       return false;
     });
 
-    // 2. Sort ("최신순으로 점점 멀리날짜로" / deadline asc)
+    // 2. Sort and filter logic
     if (sortOrder === 'DEADLINE_ASC') {
       return [...filtered].sort((a, b) => {
         const hasA = Boolean(a.deadlineDate && a.deadlineDate.trim());
@@ -197,10 +233,26 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
         if (hasB) return 1;
         return 0;
       });
+    } else if (sortOrder === 'INSPECTION_ASC') {
+      // "검사일시/구분 필터 누르면 빠른순인데 날짜만 있는건 제외하고 시간이 같이 있는것만 빠른순으로"
+      // Only keep records where inspectionDate has both date and time (ex: "2026-09-15 14:00")
+      const withTimeOnly = filtered.filter((r) => hasInspectionTime(r.inspectionDate));
+      return withTimeOnly.sort((a, b) => {
+        const valA = (a.inspectionDate || '').trim();
+        const valB = (b.inspectionDate || '').trim();
+        return valA.localeCompare(valB);
+      });
+    } else if (sortOrder === 'INSPECTION_DESC') {
+      const withTimeOnly = filtered.filter((r) => hasInspectionTime(r.inspectionDate));
+      return withTimeOnly.sort((a, b) => {
+        const valA = (a.inspectionDate || '').trim();
+        const valB = (b.inspectionDate || '').trim();
+        return valB.localeCompare(valA);
+      });
     }
 
     return filtered;
-  }, [records, searchTerm, selectedArea, sortOrder]);
+  }, [records, searchTerm, selectedArea, selectedInspectionType, sortOrder]);
 
   // Pagination calculation
   const totalPages = Math.max(1, Math.ceil(filteredAndSortedRecords.length / pageSize));
@@ -212,7 +264,7 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
   // Reset to page 1 on filter/sort change
   React.useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedArea, sortOrder, pageSize]);
+  }, [searchTerm, selectedArea, selectedInspectionType, sortOrder, pageSize]);
 
   // Toggle deadline sort
   const toggleDeadlineSort = () => {
@@ -222,6 +274,17 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
       setSortOrder('ORIGINAL');
     } else {
       setSortOrder('DEADLINE_ASC');
+    }
+  };
+
+  // Toggle inspection date/time sort
+  const toggleInspectionSort = () => {
+    if (sortOrder === 'INSPECTION_ASC') {
+      setSortOrder('INSPECTION_DESC');
+    } else if (sortOrder === 'INSPECTION_DESC') {
+      setSortOrder('ORIGINAL');
+    } else {
+      setSortOrder('INSPECTION_ASC');
     }
   };
 
@@ -300,6 +363,37 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
 
           {/* Sort & PageSize Controls */}
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            {/* 검사일시 정렬 버튼 */}
+            <button
+              onClick={toggleInspectionSort}
+              className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold border transition-all ${
+                sortOrder === 'INSPECTION_ASC'
+                  ? 'bg-blue-950/90 text-blue-300 border-blue-600/80 shadow-xs'
+                  : sortOrder === 'INSPECTION_DESC'
+                  ? 'bg-blue-950/50 text-blue-400 border-blue-800'
+                  : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
+              }`}
+              title="검사일시 정렬 전환 (시간포함된 빠른순 / 늦은순 / 기본)"
+            >
+              {sortOrder === 'INSPECTION_ASC' ? (
+                <>
+                  <ArrowUp className="w-3.5 h-3.5 text-blue-400" />
+                  <span>검사일시 빠른순</span>
+                </>
+              ) : sortOrder === 'INSPECTION_DESC' ? (
+                <>
+                  <ArrowDown className="w-3.5 h-3.5 text-blue-400" />
+                  <span>검사일시 늦은순</span>
+                </>
+              ) : (
+                <>
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                  <span>검사일시순</span>
+                </>
+              )}
+            </button>
+
+            {/* 마감날짜 정렬 버튼 */}
             <button
               onClick={toggleDeadlineSort}
               className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold border transition-all ${
@@ -324,10 +418,31 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
               ) : (
                 <>
                   <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
-                  <span>기본 순서</span>
+                  <span>마감일순</span>
                 </>
               )}
             </button>
+
+            {/* 검사구분 필터 드롭다운 */}
+            {inspectionTypes.length > 0 && (
+              <select
+                value={selectedInspectionType}
+                onChange={(e) => setSelectedInspectionType(e.target.value)}
+                className={`px-3 py-2.5 bg-slate-950 border text-xs font-medium rounded-xl focus:border-blue-500 focus:outline-none transition-colors ${
+                  selectedInspectionType !== 'ALL'
+                    ? 'border-blue-500 text-blue-300 font-bold bg-blue-950/40'
+                    : 'border-slate-800 text-slate-300'
+                }`}
+                title="검사구분 필터"
+              >
+                <option value="ALL">구분: 전체</option>
+                {inspectionTypes.map((type) => (
+                  <option key={type} value={type}>
+                    구분: {type}
+                  </option>
+                ))}
+              </select>
+            )}
 
             <select
               value={pageSize}
@@ -393,11 +508,37 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
             <span className="ml-1 opacity-80 text-[11px]">({areaCounts.gyeonggi.toLocaleString()})</span>
           </button>
 
+          {selectedInspectionType !== 'ALL' && (
+            <button
+              onClick={() => setSelectedInspectionType('ALL')}
+              className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-950/80 border border-blue-600 text-blue-300 font-medium text-[11px] hover:bg-blue-900 transition-colors"
+              title="검사구분 필터 해제"
+            >
+              <span>{selectedInspectionType}</span>
+              <X className="w-3 h-3 text-blue-400" />
+            </button>
+          )}
+
           <span className="col-span-4 sm:col-span-1 sm:ml-auto text-slate-400 text-xs font-medium text-right pt-1 sm:pt-0">
             조회 결과: <strong className="text-blue-400 font-bold">{filteredAndSortedRecords.length.toLocaleString()}</strong>건
             {sortOrder === 'DEADLINE_ASC' && (
               <span className="text-amber-300/80 ml-2 hidden sm:inline">
                 (마감일 빠른순)
+              </span>
+            )}
+            {sortOrder === 'DEADLINE_DESC' && (
+              <span className="text-amber-300/80 ml-2 hidden sm:inline">
+                (마감일 늦은순)
+              </span>
+            )}
+            {sortOrder === 'INSPECTION_ASC' && (
+              <span className="text-blue-300/80 ml-2 hidden sm:inline">
+                (검사일시 빠른순 · 시간 포함)
+              </span>
+            )}
+            {sortOrder === 'INSPECTION_DESC' && (
+              <span className="text-blue-300/80 ml-2 hidden sm:inline">
+                (검사일시 늦은순 · 시간 포함)
               </span>
             )}
           </span>
@@ -436,7 +577,27 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
                 <tr className="bg-slate-950/80 text-slate-400 border-b border-slate-800">
                   <th className="py-3 px-4 font-semibold w-[200px]">현장명 / 번호</th>
                   <th className="py-3 px-3 font-semibold w-[160px]">구역 / 주소</th>
-                  <th className="py-3 px-3 font-semibold w-[150px]">검사 일시 / 구분</th>
+                  <th 
+                    onClick={toggleInspectionSort}
+                    className="py-3 px-3 font-semibold w-[150px] cursor-pointer hover:bg-slate-800/80 transition-colors select-none group"
+                    title="클릭하여 검사일시 정렬 전환"
+                  >
+                    <div className="inline-flex items-center gap-1 text-slate-300 font-semibold group-hover:text-blue-300">
+                      <span>검사 일시 / 구분</span>
+                      {sortOrder === 'INSPECTION_ASC' ? (
+                        <ArrowUp className="w-3.5 h-3.5 text-blue-400" />
+                      ) : sortOrder === 'INSPECTION_DESC' ? (
+                        <ArrowDown className="w-3.5 h-3.5 text-blue-400" />
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-600 group-hover:text-blue-300" />
+                      )}
+                    </div>
+                    {(sortOrder === 'INSPECTION_ASC' || sortOrder === 'INSPECTION_DESC') && (
+                      <div className="text-[10px] text-blue-400 font-normal">
+                        {sortOrder === 'INSPECTION_ASC' ? '빠른순' : '늦은순'}
+                      </div>
+                    )}
+                  </th>
                   <th className="py-3 px-3 font-semibold w-[100px]">검사결과</th>
                   <th className="py-3 px-4 font-semibold min-w-[340px]">조건부 내용</th>
                   <th 
@@ -514,8 +675,13 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
                         <td className="py-3.5 px-3 align-top whitespace-nowrap">
                           {rec.inspectionDate ? (
                             <div className="space-y-1">
-                              <div className="font-bold text-slate-200">
-                                {rec.inspectionDate}
+                              <div className="font-bold text-slate-200 flex items-center gap-1.5 flex-wrap">
+                                <span>{rec.inspectionDate}</span>
+                                {rec.inspectionScheduledDateTime && (
+                                  <span className="px-1.5 py-0.5 rounded bg-blue-900/80 text-blue-300 text-[10px] font-semibold border border-blue-700/80" title="점검표TO캘린더 검사정리 연동">
+                                    캘린더
+                                  </span>
+                                )}
                               </div>
                               {rec.inspectionType && (
                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800 text-slate-300 border border-slate-700">
@@ -679,7 +845,14 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
                       {/* 검사 일시/구분 & 마감 날짜 Grid */}
                       <div className="grid grid-cols-2 gap-2 text-xs bg-slate-950/90 p-3 rounded-xl border border-slate-800">
                         <div>
-                          <span className="text-slate-500 block text-[10px] font-medium">검사 일시 / 구분</span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-slate-500 block text-[10px] font-medium">검사 일시 / 구분</span>
+                            {rec.inspectionScheduledDateTime && (
+                              <span className="px-1 py-0.2 rounded bg-blue-900/80 text-blue-300 text-[9px] font-semibold border border-blue-700/80">
+                                캘린더
+                              </span>
+                            )}
+                          </div>
                           <span className="text-slate-200 font-bold block mt-0.5">
                             {rec.inspectionDate || '-'}
                           </span>
@@ -849,9 +1022,14 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
                   <span className="text-[11px] font-semibold text-blue-400 uppercase tracking-wider block">
                     검사 일시 / 구분 및 결과
                   </span>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-slate-400">검사일자:</span>
                     <strong className="text-white font-bold">{selectedRecord.inspectionDate || '-'}</strong>
+                    {selectedRecord.inspectionScheduledDateTime && (
+                      <span className="px-1.5 py-0.5 rounded bg-blue-900/80 text-blue-300 text-[10px] font-semibold border border-blue-700/80">
+                        점검표TO캘린더 연동
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-slate-400">검사구분:</span>
