@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Database, 
   Search, 
@@ -14,10 +14,19 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowLeft,
-  X
+  X,
+  Sparkles
 } from 'lucide-react';
 import { ElevatorRecord } from '../types';
-import { SPREADSHEET_ID } from '../services/sheetsService';
+import { SPREADSHEET_ID, normalizeDateTime } from '../services/sheetsService';
+import { ElevatorDetailModal } from './ElevatorDetailModal';
+import { 
+  cleanAreaName, 
+  getAreaBadgeClass, 
+  scoreElevatorRecord, 
+  stripWhitespace,
+  parseConditionLines 
+} from '../utils/elevatorUtils';
 
 interface ElevatorDataTableProps {
   records: ElevatorRecord[];
@@ -26,15 +35,11 @@ interface ElevatorDataTableProps {
   lastUpdated: string | null;
   onRefresh: () => void;
   onBack?: () => void;
+  initialSearchQuery?: string;
+  initialSelectedRecord?: ElevatorRecord | null;
 }
 
-// Split condition remarks by "숫자)" pattern (e.g. 1) ... 2) ...)
-export function parseConditionLines(remarks: string): string[] {
-  if (!remarks || !remarks.trim()) return [];
-  // Split on pattern where a number followed by ) appears, preserving the number) prefix
-  const parts = remarks.trim().split(/(?=\b\d+\))/).map((s) => s.trim()).filter(Boolean);
-  return parts.length > 0 ? parts : [remarks.trim()];
-}
+// Remove duplicated parseConditionLines since imported from elevatorUtils
 
 export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
   records,
@@ -43,17 +48,36 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
   lastUpdated,
   onRefresh,
   onBack,
+  initialSearchQuery = '',
+  initialSelectedRecord = null,
 }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(initialSearchQuery);
   const [selectedArea, setSelectedArea] = useState<'ALL' | '강남' | '강북' | '경기'>('ALL');
   const [selectedInspectionType, setSelectedInspectionType] = useState<string>('ALL');
-  // Sort options: deadline, inspection date/time, or original
+  // Sort options: relevance (priority), inspection date/time, deadline, or original
   const [sortOrder, setSortOrder] = useState<
-    'DEADLINE_ASC' | 'DEADLINE_DESC' | 'INSPECTION_ASC' | 'INSPECTION_DESC' | 'ORIGINAL'
-  >('DEADLINE_ASC');
+    'RELEVANCE' | 'DEADLINE_ASC' | 'DEADLINE_DESC' | 'INSPECTION_ASC' | 'INSPECTION_DESC' | 'ORIGINAL'
+  >(initialSearchQuery ? 'RELEVANCE' : 'INSPECTION_ASC');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [selectedRecord, setSelectedRecord] = useState<ElevatorRecord | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<ElevatorRecord | null>(initialSelectedRecord);
+
+  // Sync when initial search query changes from outside (e.g., global search)
+  useEffect(() => {
+    if (initialSearchQuery !== undefined) {
+      setSearchTerm(initialSearchQuery);
+      if (initialSearchQuery.trim()) {
+        setSortOrder('RELEVANCE');
+      }
+      setCurrentPage(1);
+    }
+  }, [initialSearchQuery]);
+
+  useEffect(() => {
+    if (initialSelectedRecord !== undefined) {
+      setSelectedRecord(initialSelectedRecord);
+    }
+  }, [initialSelectedRecord]);
   // Track expanded condition remarks for each row
   const [expandedRemarks, setExpandedRemarks] = useState<Record<string, boolean>>({});
 
@@ -109,15 +133,32 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
     return String(str || '').replace(/\s+/g, '').toLowerCase();
   };
 
-  // Helper to check if inspectionDate has both date and time (e.g. "2026-09-15 14:00" or "09/15 14:00" or has hours:minutes like "14:00" or "9:30")
-  const hasInspectionTime = (str: string | undefined | null): boolean => {
-    if (!str) return false;
-    const trimmed = str.trim();
+  // Helper to check if record has inspection date and time (e.g. "2026-09-15 14:00" or from calendar schedule)
+  const hasInspectionTime = (recOrStr: ElevatorRecord | string | undefined | null): boolean => {
+    if (!recOrStr) return false;
+    if (typeof recOrStr === 'object') {
+      if (recOrStr.inspectionScheduledDateTime && String(recOrStr.inspectionScheduledDateTime).trim()) {
+        return true;
+      }
+      return hasInspectionTime(recOrStr.inspectionDate);
+    }
+    const trimmed = String(recOrStr).trim();
     if (!trimmed) return false;
     // Check for presence of time pattern like HH:mm (e.g., 14:00, 9:30, 09:30)
-    // and a date component
     return /\b\d{1,2}:\d{2}\b/.test(trimmed);
   };
+
+  // Helper to get normalized comparable key for inspection datetime (canonical "YYYY-MM-DD HH:mm")
+  const getInspectionSortKey = (rec: ElevatorRecord): string => {
+    const raw = rec.inspectionScheduledDateTime || rec.inspectionDate || '';
+    if (!raw.trim()) return '9999-99-99 99:99';
+    return normalizeDateTime(raw);
+  };
+
+  // Count records with inspection date & time
+  const scheduledTimeCount = useMemo(() => {
+    return records.filter((r) => hasInspectionTime(r)).length;
+  }, [records]);
 
   // Filter and sort logic
   const filteredAndSortedRecords = useMemo(() => {
@@ -140,78 +181,20 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
         }
       }
 
-      // Keyword search (띄어쓰기 무시 + 승강기 번호 0000272 / 272 유연 검색 지원)
+      // Keyword search (1순위 현장명, 2순위 승강기번호, 3순위 구역, 4순위 모델명, 5순위 주소 등 띄어쓰기 무시)
       if (!searchTerm.trim()) return true;
-
-      const rawQuery = searchTerm.toLowerCase().trim();
-      const normalizedQuery = stripWhitespace(rawQuery);
-
-      // Digits-only query for elevator number match (e.g. "0000272", "0000-272", "272")
-      const digitsQuery = rawQuery.replace(/\D/g, '');
-      const strippedZeroQuery = digitsQuery.replace(/^0+/, '');
-
-      const elNumStr = String(rec.elevatorNumber || '').trim();
-      const elDigits = elNumStr.replace(/\D/g, '');
-      const strippedZeroEl = elDigits.replace(/^0+/, '');
-      const paddedEl7 = elDigits ? elDigits.padStart(7, '0') : '';
-
-      // Check elevator number match:
-      if (digitsQuery.length > 0) {
-        if (
-          elNumStr === rawQuery ||
-          elDigits === digitsQuery ||
-          paddedEl7 === digitsQuery ||
-          (strippedZeroQuery.length > 0 && strippedZeroEl === strippedZeroQuery) ||
-          elDigits.includes(digitsQuery) ||
-          paddedEl7.includes(digitsQuery)
-        ) {
-          return true;
-        }
-      }
-
-      // Multiple words split (e.g. "대명 101")
-      const words = rawQuery.split(/\s+/).filter(Boolean);
-
-      // Combined text normalized
-      const combined = `${rec.siteName || ''} ${rec.elevatorNumber || ''} ${rec.address || ''} ${rec.area || ''} ${rec.inspectionType || ''} ${rec.inspectionDate || ''} ${rec.inspectionResult || ''} ${rec.conditionRemarks || ''} ${rec.deadlineDate || ''} ${rec.technicianPrimary || ''} ${paddedEl7}`;
-      const combinedNormalized = stripWhitespace(combined);
-
-      // 1) Space-insensitive match across the entire record
-      if (combinedNormalized.includes(normalizedQuery)) {
-        return true;
-      }
-
-      // 2) Field-by-field space-insensitive match
-      const fields = [
-        rec.siteName,
-        rec.elevatorNumber,
-        rec.address,
-        rec.area,
-        rec.inspectionType,
-        rec.inspectionDate,
-        rec.inspectionResult,
-        rec.conditionRemarks,
-        rec.deadlineDate,
-        rec.technicianPrimary,
-        paddedEl7,
-      ];
-      if (fields.some((field) => stripWhitespace(field).includes(normalizedQuery))) {
-        return true;
-      }
-
-      // 3) Multi-token search (all keywords must exist in the record)
-      if (words.length > 1) {
-        const allWordsFound = words.every((w) => combinedNormalized.includes(stripWhitespace(w)));
-        if (allWordsFound) {
-          return true;
-        }
-      }
-
-      return false;
+      return scoreElevatorRecord(rec, searchTerm) > 0;
     });
 
     // 2. Sort and filter logic
-    if (sortOrder === 'DEADLINE_ASC') {
+    if (sortOrder === 'RELEVANCE' || (searchTerm.trim() && sortOrder === 'ORIGINAL')) {
+      return [...filtered].sort((a, b) => {
+        const sA = scoreElevatorRecord(a, searchTerm);
+        const sB = scoreElevatorRecord(b, searchTerm);
+        if (sB !== sA) return sB - sA;
+        return (a.siteName || '').localeCompare(b.siteName || '');
+      });
+    } else if (sortOrder === 'DEADLINE_ASC') {
       return [...filtered].sort((a, b) => {
         const hasA = Boolean(a.deadlineDate && a.deadlineDate.trim());
         const hasB = Boolean(b.deadlineDate && b.deadlineDate.trim());
@@ -236,18 +219,18 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
     } else if (sortOrder === 'INSPECTION_ASC') {
       // "검사일시/구분 필터 누르면 빠른순인데 날짜만 있는건 제외하고 시간이 같이 있는것만 빠른순으로"
       // Only keep records where inspectionDate has both date and time (ex: "2026-09-15 14:00")
-      const withTimeOnly = filtered.filter((r) => hasInspectionTime(r.inspectionDate));
+      const withTimeOnly = filtered.filter((r) => hasInspectionTime(r));
       return withTimeOnly.sort((a, b) => {
-        const valA = (a.inspectionDate || '').trim();
-        const valB = (b.inspectionDate || '').trim();
-        return valA.localeCompare(valB);
+        const keyA = getInspectionSortKey(a);
+        const keyB = getInspectionSortKey(b);
+        return keyA.localeCompare(keyB);
       });
     } else if (sortOrder === 'INSPECTION_DESC') {
-      const withTimeOnly = filtered.filter((r) => hasInspectionTime(r.inspectionDate));
+      const withTimeOnly = filtered.filter((r) => hasInspectionTime(r));
       return withTimeOnly.sort((a, b) => {
-        const valA = (a.inspectionDate || '').trim();
-        const valB = (b.inspectionDate || '').trim();
-        return valB.localeCompare(valA);
+        const keyA = getInspectionSortKey(a);
+        const keyB = getInspectionSortKey(b);
+        return keyB.localeCompare(keyA);
       });
     }
 
@@ -304,9 +287,12 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
               <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
                 현장 검사조건부 조회
               </h2>
-              {/* 모바일에서는 실시간 연동, 마감일 2개만 표출 */}
+              {/* 실시간 연동, 검사일정, 마감일 뱃지 */}
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800/80">
                 실시간 연동
+              </span>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-950 text-blue-300 border border-blue-800">
+                검사일정 {scheduledTimeCount}개
               </span>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-950 text-amber-300 border border-amber-800">
                 마감일 {deadlineCount}개
@@ -347,8 +333,14 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
             <input
               type="text"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="현장명, 승강기번호(0000272), 주소, 조건부 지적내용, 마감날짜 등 검색..."
+              onChange={(e) => {
+                const val = e.target.value;
+                setSearchTerm(val);
+                if (val.trim()) {
+                  setSortOrder('RELEVANCE');
+                }
+              }}
+              placeholder="현장명, 승강기번호(7자리), 구역(강남/강북/경기), 모델명 통합검색 (띄어쓰기 무관)..."
               className="w-full pl-10 pr-9 py-2.5 bg-slate-950 border border-slate-800 focus:border-blue-500 rounded-xl text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
             />
             {searchTerm && (
@@ -363,6 +355,22 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
 
           {/* Sort & PageSize Controls */}
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            {/* 검색 우선순위순 정렬 버튼 (검색어 있을 때) */}
+            {searchTerm.trim() && (
+              <button
+                onClick={() => setSortOrder('RELEVANCE')}
+                className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold border transition-all ${
+                  sortOrder === 'RELEVANCE'
+                    ? 'bg-blue-600 text-white border-blue-500 shadow-xs'
+                    : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
+                }`}
+                title="1순위 현장명 · 2순위 번호 · 3순위 구역 · 4순위 모델 순위 정렬"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>우선순위순</span>
+              </button>
+            )}
+
             {/* 검사일시 정렬 버튼 */}
             <button
               onClick={toggleInspectionSort}
@@ -521,24 +529,24 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
 
           <span className="col-span-4 sm:col-span-1 sm:ml-auto text-slate-400 text-xs font-medium text-right pt-1 sm:pt-0">
             조회 결과: <strong className="text-blue-400 font-bold">{filteredAndSortedRecords.length.toLocaleString()}</strong>건
-            {sortOrder === 'DEADLINE_ASC' && (
-              <span className="text-amber-300/80 ml-2 hidden sm:inline">
-                (마감일 빠른순)
-              </span>
-            )}
-            {sortOrder === 'DEADLINE_DESC' && (
-              <span className="text-amber-300/80 ml-2 hidden sm:inline">
-                (마감일 늦은순)
-              </span>
-            )}
             {sortOrder === 'INSPECTION_ASC' && (
-              <span className="text-blue-300/80 ml-2 hidden sm:inline">
+              <span className="text-blue-300/90 ml-1.5 inline-block text-[11px] font-semibold">
                 (검사일시 빠른순 · 시간 포함)
               </span>
             )}
             {sortOrder === 'INSPECTION_DESC' && (
-              <span className="text-blue-300/80 ml-2 hidden sm:inline">
+              <span className="text-blue-300/90 ml-1.5 inline-block text-[11px] font-semibold">
                 (검사일시 늦은순 · 시간 포함)
+              </span>
+            )}
+            {sortOrder === 'DEADLINE_ASC' && (
+              <span className="text-amber-300/90 ml-1.5 inline-block text-[11px]">
+                (마감일 빠른순)
+              </span>
+            )}
+            {sortOrder === 'DEADLINE_DESC' && (
+              <span className="text-amber-300/90 ml-1.5 inline-block text-[11px]">
+                (마감일 늦은순)
               </span>
             )}
           </span>
@@ -648,7 +656,7 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                             {rec.elevatorNumber && (
                               <span className="px-1.5 py-0.5 rounded bg-slate-800 font-mono text-[11px] text-slate-300 border border-slate-700">
-                                #{rec.elevatorNumber}
+                                {rec.elevatorNumber}
                               </span>
                             )}
                             {rec.type && (
@@ -657,13 +665,18 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
                               </span>
                             )}
                           </div>
+                          {rec.model && (
+                            <div className="text-[11px] text-slate-400 font-mono mt-0.5 truncate max-w-[220px]" title={rec.model}>
+                              {rec.model}
+                            </div>
+                          )}
                         </td>
 
                         {/* 2. 구역 / 주소 */}
                         <td className="py-3.5 px-3 align-top max-w-[160px]">
                           <div className="inline-block">
-                            <span className="px-1.5 py-0.5 rounded bg-blue-950 text-blue-300 text-[10px] font-semibold border border-blue-800">
-                              {rec.area || '일반'} 구역
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${getAreaBadgeClass(rec.area)}`}>
+                              {cleanAreaName(rec.area)}
                             </span>
                           </div>
                           <div className="text-[11px] text-slate-400 break-words mt-1 leading-snug" title={rec.address}>
@@ -675,16 +688,17 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
                         <td className="py-3.5 px-3 align-top whitespace-nowrap">
                           {rec.inspectionDate ? (
                             <div className="space-y-1">
-                              <div className="font-bold text-slate-200 flex items-center gap-1.5 flex-wrap">
+                              <div className="font-bold text-slate-200">
                                 <span>{rec.inspectionDate}</span>
-                                {rec.inspectionScheduledDateTime && (
-                                  <span className="px-1.5 py-0.5 rounded bg-blue-900/80 text-blue-300 text-[10px] font-semibold border border-blue-700/80" title="점검표TO캘린더 검사정리 연동">
-                                    캘린더
-                                  </span>
-                                )}
                               </div>
                               {rec.inspectionType && (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${
+                                    rec.inspectionType.includes('정밀')
+                                      ? 'bg-rose-950 text-rose-300 border-rose-800 font-bold'
+                                      : 'bg-slate-800 text-slate-300 border-slate-700'
+                                  }`}
+                                >
                                   {rec.inspectionType}
                                 </span>
                               )}
@@ -771,8 +785,19 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
                   })
                 ) : (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-slate-500 text-sm">
-                      검색 조건에 일치하는 승강기 현장이 없습니다.
+                    <td colSpan={6} className="py-12 text-center text-slate-400 text-sm">
+                      <div className="space-y-2">
+                        <div>조건에 일치하는 현장 데이터가 없습니다.</div>
+                        {sortOrder.startsWith('INSPECTION') && (
+                          <button
+                            type="button"
+                            onClick={() => setSortOrder('DEADLINE_ASC')}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 text-xs border border-slate-700 cursor-pointer"
+                          >
+                            <span>마감일순으로 전체 현장 보기</span>
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )}
@@ -810,13 +835,23 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                             {rec.elevatorNumber && (
                               <span className="px-1.5 py-0.5 rounded bg-slate-800 font-mono text-[11px] text-slate-300 border border-slate-700">
-                                #{rec.elevatorNumber}
+                                {rec.elevatorNumber}
                               </span>
                             )}
-                            <span className="text-xs text-blue-400 font-semibold">
-                              {rec.area || '일반'} 구역
+                            {rec.type && (
+                              <span className="text-xs text-slate-400">
+                                {rec.type}
+                              </span>
+                            )}
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${getAreaBadgeClass(rec.area)}`}>
+                              {cleanAreaName(rec.area)}
                             </span>
                           </div>
+                          {rec.model && (
+                            <div className="text-xs text-slate-400 font-mono mt-0.5 truncate">
+                              {rec.model}
+                            </div>
+                          )}
                         </div>
 
                         {/* 검사결과 */}
@@ -845,19 +880,18 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
                       {/* 검사 일시/구분 & 마감 날짜 Grid */}
                       <div className="grid grid-cols-2 gap-2 text-xs bg-slate-950/90 p-3 rounded-xl border border-slate-800">
                         <div>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-slate-500 block text-[10px] font-medium">검사 일시 / 구분</span>
-                            {rec.inspectionScheduledDateTime && (
-                              <span className="px-1 py-0.2 rounded bg-blue-900/80 text-blue-300 text-[9px] font-semibold border border-blue-700/80">
-                                캘린더
-                              </span>
-                            )}
-                          </div>
+                          <span className="text-slate-500 block text-[10px] font-medium">검사 일시 / 구분</span>
                           <span className="text-slate-200 font-bold block mt-0.5">
                             {rec.inspectionDate || '-'}
                           </span>
                           {rec.inspectionType && (
-                            <span className="text-blue-400 block text-[11px] mt-0.5 font-medium">
+                            <span
+                              className={`block text-[11px] mt-0.5 font-semibold ${
+                                rec.inspectionType.includes('정밀')
+                                  ? 'text-rose-400 font-bold'
+                                  : 'text-blue-400'
+                              }`}
+                            >
                               {rec.inspectionType}
                             </span>
                           )}
@@ -937,8 +971,17 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
                 );
               })
             ) : (
-              <div className="py-12 text-center text-slate-500 text-xs">
-                검색 조건에 일치하는 현장이 없습니다.
+              <div className="py-12 text-center text-slate-400 text-xs space-y-2">
+                <div>검색 조건에 일치하는 현장이 없습니다.</div>
+                {sortOrder.startsWith('INSPECTION') && (
+                  <button
+                    type="button"
+                    onClick={() => setSortOrder('DEADLINE_ASC')}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 text-xs border border-slate-700 cursor-pointer"
+                  >
+                    <span>마감일순으로 전체 현장 보기</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -982,148 +1025,10 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
       ) : null}
 
       {/* Detailed Modal Popup */}
-      {selectedRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
-            {/* Modal Header */}
-            <div className="p-5 border-b border-slate-800 flex items-start justify-between gap-3 sticky top-0 bg-slate-900/95 backdrop-blur-md z-10">
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-lg font-bold text-white tracking-tight">
-                    {selectedRecord.siteName}
-                  </h3>
-                  {selectedRecord.elevatorNumber && (
-                    <span className="px-2 py-0.5 rounded bg-blue-950 text-blue-300 font-mono text-xs border border-blue-800">
-                      고유번호: {selectedRecord.elevatorNumber}
-                    </span>
-                  )}
-                  <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-xs border border-slate-700">
-                    {selectedRecord.area} 구역
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 mt-1">
-                  {selectedRecord.address || '주소 정보 없음'}
-                </p>
-              </div>
-
-              <button
-                onClick={() => setSelectedRecord(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-5 space-y-5 text-xs sm:text-sm">
-              {/* Inspection and Deadline Info */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-1.5">
-                  <span className="text-[11px] font-semibold text-blue-400 uppercase tracking-wider block">
-                    검사 일시 / 구분 및 결과
-                  </span>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-slate-400">검사일자:</span>
-                    <strong className="text-white font-bold">{selectedRecord.inspectionDate || '-'}</strong>
-                    {selectedRecord.inspectionScheduledDateTime && (
-                      <span className="px-1.5 py-0.5 rounded bg-blue-900/80 text-blue-300 text-[10px] font-semibold border border-blue-700/80">
-                        점검표TO캘린더 연동
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-400">검사구분:</span>
-                    <strong className="text-white">{selectedRecord.inspectionType || '-'}</strong>
-                    <span className="text-slate-500">|</span>
-                    <span className="text-slate-400">결과:</span>
-                    <strong className={selectedRecord.inspectionResult.includes('조건부') ? 'text-amber-400 font-bold' : 'text-emerald-400 font-bold'}>
-                      {selectedRecord.inspectionResult || '-'}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="bg-amber-950/30 p-3.5 rounded-xl border border-amber-900/60 space-y-1.5">
-                  <span className="text-[11px] font-semibold text-amber-400 uppercase tracking-wider block">
-                    마감 날짜
-                  </span>
-                  <div className="text-amber-300 font-mono font-bold text-base">
-                    {selectedRecord.deadlineDate || '지정된 마감날짜 없음'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Condition Remarks */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5 font-bold text-amber-300">
-                  <AlertTriangle className="w-4 h-4 text-amber-400" />
-                  <span>조건부 내용 (지적 사항 전체)</span>
-                </div>
-
-                {parseConditionLines(selectedRecord.conditionRemarks).length > 0 ? (
-                  <div className="space-y-2 bg-amber-950/20 p-3 rounded-xl border border-amber-900/40">
-                    {parseConditionLines(selectedRecord.conditionRemarks).map((line, idx) => (
-                      <div
-                        key={idx}
-                        className="text-amber-100/90 leading-relaxed bg-amber-950/60 p-2.5 rounded-lg border border-amber-900/40 text-xs sm:text-sm font-sans"
-                      >
-                        {line}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="bg-emerald-950/20 border border-emerald-900/40 rounded-xl p-3 text-emerald-300 text-xs flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    <span>등록된 조건부 지적사항이 없거나 조치 완료된 현장입니다.</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Specs Details */}
-              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-                <h5 className="font-bold text-slate-300 text-xs uppercase tracking-wider">
-                  승강기 제원 정보
-                </h5>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                  <div>
-                    <span className="text-slate-500 block">제조업체 / 모델</span>
-                    <span className="text-slate-200 font-medium">
-                      {selectedRecord.manufacturer || '-'} {selectedRecord.model ? `(${selectedRecord.model})` : ''}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block">용도 / 적재하중</span>
-                    <span className="text-slate-200 font-medium">
-                      {selectedRecord.type || '-'} / {selectedRecord.capacity || '-'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block">보험사</span>
-                    <span className="text-slate-200 font-medium">
-                      {selectedRecord.insurance || '-'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block">안전관리자</span>
-                    <span className="text-slate-200 font-medium">
-                      {selectedRecord.safetyManager || '-'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-800 bg-slate-900/90 flex justify-end">
-              <button
-                onClick={() => setSelectedRecord(null)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs rounded-xl transition-colors"
-              >
-                닫기
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ElevatorDetailModal 
+        record={selectedRecord} 
+        onClose={() => setSelectedRecord(null)} 
+      />
     </section>
   );
 };

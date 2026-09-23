@@ -7,6 +7,8 @@ import { SiteCard } from './components/SiteCard';
 import { ElevatorDataTable } from './components/ElevatorDataTable';
 import { CalendarSection } from './components/CalendarSection';
 import { ReportFormSection } from './components/ReportFormSection';
+import { GlobalSearch } from './components/GlobalSearch';
+import { ElevatorDetailModal } from './components/ElevatorDetailModal';
 
 const GOOGLE_CALENDAR_URL =
   'https://calendar.google.com/calendar/embed?src=2e9b26406360e509de22bf93385e651ac80edf9f70cfa23ddaa3fb2e80a56560%40group.calendar.google.com&ctz=Asia%2FSeoul';
@@ -18,6 +20,10 @@ export default function App() {
   const [isLoadingDb, setIsLoadingDb] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
   const [lastDbUpdated, setLastDbUpdated] = useState<string | null>(null);
+
+  // Search query state passed from GlobalSearch on home page to ElevatorDataTable
+  const [dbSearchQuery, setDbSearchQuery] = useState('');
+  const [selectedElevatorModalRecord, setSelectedElevatorModalRecord] = useState<ElevatorRecord | null>(null);
 
   // Sync view with URL hash (#inspection-db, #calendar, #report-form)
   useEffect(() => {
@@ -80,7 +86,10 @@ export default function App() {
     refreshData();
   };
 
-  const navigateToDb = () => {
+  const navigateToDb = (optionalQuery?: string) => {
+    if (optionalQuery !== undefined) {
+      setDbSearchQuery(optionalQuery);
+    }
     setCurrentView('inspection-db');
     try {
       if (window.location.hash !== '#inspection-db') {
@@ -88,6 +97,15 @@ export default function App() {
       }
     } catch {}
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleGlobalSearchSubmit = (query: string) => {
+    setDbSearchQuery(query);
+    navigateToDb(query);
+  };
+
+  const handleSelectRecordFromGlobal = (record: ElevatorRecord) => {
+    setSelectedElevatorModalRecord(record);
   };
 
   const navigateToCalendar = () => {
@@ -126,7 +144,7 @@ export default function App() {
       <Header 
         currentView={currentView}
         onNavigateHome={navigateToHome}
-        onNavigateDb={navigateToDb}
+        onNavigateDb={() => navigateToDb()}
         onNavigateCalendar={navigateToCalendar}
         onNavigateReportForm={navigateToReportForm}
       />
@@ -134,15 +152,28 @@ export default function App() {
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {currentView === 'home' ? (
-          <div className="space-y-6">
-            {/* Site Cards Grid: Clean boxes only */}
+          <div className="space-y-6 sm:space-y-8">
+            {/* 메인 페이지 4개 박스 위 통합검색 (Global Search) */}
+            <section aria-label="통합검색">
+              <GlobalSearch
+                records={elevatorRecords}
+                sites={sites}
+                onSearchSubmit={handleGlobalSearchSubmit}
+                onSelectRecord={handleSelectRecordFromGlobal}
+                onOpenDb={() => navigateToDb()}
+                onOpenCalendar={navigateToCalendar}
+                onOpenReportForm={navigateToReportForm}
+              />
+            </section>
+
+            {/* Site Cards Grid: Clean 4 boxes */}
             <section aria-label="주요 업무 사이트 바로가기">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 {sites.map((site) => (
                   <SiteCard
                     key={site.id}
                     site={site}
-                    onOpenDb={navigateToDb}
+                    onOpenDb={() => navigateToDb()}
                     onOpenCalendar={navigateToCalendar}
                     onOpenReportForm={navigateToReportForm}
                     onToggleFavorite={handleToggleFavorite}
@@ -160,6 +191,7 @@ export default function App() {
               error={dbError}
               lastUpdated={lastDbUpdated}
               onRefresh={loadElevatorData}
+              initialSearchQuery={dbSearchQuery}
             />
           </div>
         ) : currentView === 'calendar' ? (
@@ -178,6 +210,16 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* Detail Modal for Home View Global Search */}
+      <ElevatorDetailModal
+        record={selectedElevatorModalRecord}
+        onClose={() => setSelectedElevatorModalRecord(null)}
+        onOpenInDb={(rec) => {
+          setSelectedElevatorModalRecord(null);
+          navigateToDb(rec.siteName);
+        }}
+      />
 
       {/* Clean Dark Footer */}
       <footer className="border-t border-slate-900 bg-slate-950 py-6 mt-8 text-center text-xs text-slate-500">
