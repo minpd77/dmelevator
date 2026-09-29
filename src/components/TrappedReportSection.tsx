@@ -49,7 +49,7 @@ interface ReportEntry {
 
 const PDF_POS = {
   reporterName: {
-    x: 123,
+    x: 126,
     y: 610,
     size: 12,
   },
@@ -61,87 +61,87 @@ const PDF_POS = {
   },
 
   siteName: {
-    x: 123,
-    y: 572,
+    x: 126,
+    y: 566,
     size: 12,
   },
 
   address: {
     x: 335,
-    y: 572,
+    y: 566,
     size: 12,
   },
 
   // ★ 승강기 번호 왼쪽 정렬
   elevatorNo: {
-    x: 123,
-    y: 525,
+    x: 126,
+    y: 519,
     size: 12,
   },
 
   occurredYear: {
     x: 335,
-    y: 525,
+    y: 519,
     size: 12,
   },
 
   occurredMonth: {
-    x: 370,
-    y: 525,
+    x: 373,
+    y: 519,
     size: 12,
   },
 
   occurredDay: {
-    x: 405,
-    y: 525,
+    x: 400,
+    y: 519,
     size: 12,
   },
 
   occurredHour: {
-    x: 455,
-    y: 525,
+    x: 450,
+    y: 519,
     size: 12,
   },
 
   occurredMinute: {
-    x: 490,
-    y: 525,
+    x: 485,
+    y: 519,
     size: 12,
   },
 
   reportTime: {
-    x: 123,
-    y: 478,
+    x: 129,
+    y: 470,
     size: 12,
   },
 
   reportContent: {
-    x: 160,
-    y: 478,
+    x: 163,
+    y: 470,
     size: 12,
   },
 
   causeLabel: {
-    x: 123,
-    y: 297,
+    x: 126,
+    y: 290,
     size: 12,
   },
 
   cause: {
-    x: 123,
-    y: 279,
+    x: 126,
+    y: 272,
     size: 12,
   },
 
   actionLabel: {
-    x: 123,
-    y: 227,
+    x: 126,
+    y: 220,
     size: 12,
   },
 
   action: {
-    x: 123,
-    y: 207,
+    x: 126,
+    y: 200,
     size: 12,
   },
 } as const;
