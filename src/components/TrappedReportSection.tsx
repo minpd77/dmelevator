@@ -11,15 +11,14 @@ const PDF_TEMPLATE =
 const FONT_URL =
   'https://cdn.jsdelivr.net/gh/fonts-archive/NotoSansKR/NotoSansKR-Regular.otf';
 
+interface Props {
+  onBack: () => void;
+}
 
 interface SheetRow {
   site: string;
   address: string;
   elevator: string;
-}
-
-interface Props {
-  onBack: () => void;
 }
 
 interface ReportEntry {
@@ -30,82 +29,144 @@ interface ReportEntry {
 }
 
 
-const SEOUL_DISTRICTS = [
-  '강남구',
-  '강동구',
-  '강북구',
-  '강서구',
-  '관악구',
-  '광진구',
-  '구로구',
-  '금천구',
-  '노원구',
-  '도봉구',
-  '동대문구',
-  '동작구',
-  '마포구',
-  '서대문구',
-  '서초구',
-  '성동구',
-  '성북구',
-  '송파구',
-  '양천구',
-  '영등포구',
-  '용산구',
-  '은평구',
-  '종로구',
-  '중구',
-  '중랑구'
-];
+/* =========================================================
+ * PDF 좌표
+ *
+ * PDF 크기 : 594 x 842
+ *
+ * ★ 앞으로 PDF 위치 조정은 여기만 수정하면 됩니다.
+ * ========================================================= */
+
+const PDF_POS = {
+
+  // ① 신고자
+  reporterName: {
+    x: 123,
+    y: 628,
+    size: 10
+  },
+
+  reporterPhone: {
+    x: 335,
+    y: 628,
+    size: 10
+  },
 
 
-const CURRENT_YEAR = new Date().getFullYear();
+  // ② 신고 현황
+  siteName: {
+    x: 123,
+    y: 580,
+    size: 10
+  },
 
-const YEAR_OPTIONS = Array.from(
-  { length: 16 },
-  (_, i) => CURRENT_YEAR - 5 + i
-);
+  address: {
+    x: 335,
+    y: 580,
+    size: 9
+  },
 
-const MONTH_OPTIONS = Array.from(
-  { length: 12 },
-  (_, i) => i + 1
-);
-
-const HOUR_OPTIONS = Array.from(
-  { length: 24 },
-  (_, i) => i
-);
-
-const MINUTE_OPTIONS = Array.from(
-  { length: 60 },
-  (_, i) => i
-);
+  elevatorNo: {
+    x: 123,
+    y: 532,
+    size: 10
+  },
 
 
-function pad2(value: number | string) {
+  // 발생일시
+  occurredYear: {
+    x: 335,
+    y: 532,
+    size: 9
+  },
+
+  occurredMonth: {
+    x: 370,
+    y: 532,
+    size: 9
+  },
+
+  occurredDay: {
+    x: 405,
+    y: 532,
+    size: 9
+  },
+
+  occurredHour: {
+    x: 455,
+    y: 532,
+    size: 9
+  },
+
+  occurredMinute: {
+    x: 490,
+    y: 532,
+    size: 9
+  },
+
+
+  // ③ 신고내용
+  reportTime: {
+    x: 123,
+    y: 485,
+    size: 9
+  },
+
+  reportContent: {
+    x: 160,
+    y: 485,
+    size: 9
+  },
+
+
+  // ④ 원인
+  causeLabel: {
+    x: 123,
+    y: 305,
+    size: 9
+  },
+
+  cause: {
+    x: 123,
+    y: 287,
+    size: 9
+  },
+
+
+  // ⑤ 조치
+  actionLabel: {
+    x: 123,
+    y: 235,
+    size: 9
+  },
+
+  action: {
+    x: 123,
+    y: 217,
+    size: 9
+  }
+
+};
+
+
+/* =========================================================
+ * 기본 함수
+ * ========================================================= */
+
+function pad2(value: string | number) {
   return String(value).padStart(2, '0');
 }
 
 
-function daysInMonth(
-  year: number,
-  month: number
-) {
-  return new Date(
-    year,
-    month,
-    0
-  ).getDate();
+function cleanSiteName(value: string) {
+  return String(value || '')
+    .replace(/\s*\(\s*LH\s*\)/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 
-/* =========================================================
- * 주소
- * ========================================================= */
-
-function normalizeAddress(
-  value: string
-): string {
+function normalizeAddress(value: string) {
 
   let address =
     String(value || '')
@@ -116,128 +177,91 @@ function normalizeAddress(
     return '';
   }
 
-  if (
-    address.startsWith(
-      '서울특별시'
-    )
-  ) {
+  if (address.startsWith('서울특별시')) {
     return address;
   }
 
   if (
-    address === '서울시' ||
     address.startsWith('서울시 ') ||
     address.startsWith('서울 ')
   ) {
 
-    address =
-      address
-        .replace(/^서울시\s*/, '')
-        .replace(/^서울\s*/, '')
-        .trim();
-
-    return `서울특별시 ${address}`;
+    return `서울특별시 ${address
+      .replace(/^서울시\s*/, '')
+      .replace(/^서울\s*/, '')
+      .trim()}`;
   }
 
-  for (
-    const district of SEOUL_DISTRICTS
+  const districts = [
+    '강남구',
+    '강동구',
+    '강북구',
+    '강서구',
+    '관악구',
+    '광진구',
+    '구로구',
+    '금천구',
+    '노원구',
+    '도봉구',
+    '동대문구',
+    '동작구',
+    '마포구',
+    '서대문구',
+    '서초구',
+    '성동구',
+    '성북구',
+    '송파구',
+    '양천구',
+    '영등포구',
+    '용산구',
+    '은평구',
+    '종로구',
+    '중구',
+    '중랑구'
+  ];
+
+  if (
+    districts.some(
+      district =>
+        address === district ||
+        address.startsWith(`${district} `)
+    )
   ) {
 
-    if (
-      address === district ||
-      address.startsWith(
-        `${district} `
-      )
-    ) {
-
-      return `서울특별시 ${address}`;
-    }
+    return `서울특별시 ${address}`;
   }
 
   return address;
 }
 
 
-/* =========================================================
- * 현장명
- * ========================================================= */
-
-function cleanSiteName(
-  value: string
-) {
-
-  return String(value || '')
-    .replace(
-      /\s*\(\s*LH\s*\)\s*/gi,
-      ''
-    )
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-
-/* =========================================================
- * 승강기 번호
- * ========================================================= */
-
-function formatElevatorNo(
-  value: string
-) {
-
-  const raw =
-    String(value || '').trim();
-
-  const digits =
-    raw.replace(/\D/g, '');
-
-  if (
-    digits.length === 7
-  ) {
-
-    return (
-      `${digits.slice(0, 4)}-${digits.slice(4)}`
-    );
-  }
-
-  const match =
-    raw.match(
-      /^(\d{4})-(\d{3})$/
-    );
-
-  if (match) {
-    return `${match[1]}-${match[2]}`;
-  }
-
-  return raw;
-}
-
-
-function normalizeElevator(
-  value: string
-) {
+function formatElevatorNo(value: string) {
 
   const digits =
     String(value || '')
       .replace(/\D/g, '');
 
-  if (!digits) {
-    return '';
+  if (digits.length === 7) {
+    return `${digits.slice(0, 4)}-${digits.slice(4)}`;
   }
 
-  return digits.padStart(
-    7,
-    '0'
-  );
+  return value;
 }
 
 
-/* =========================================================
- * 검색용 문자열
- * ========================================================= */
+function normalizeElevator(value: string) {
 
-function normalizeText(
-  value: string
-) {
+  const digits =
+    String(value || '')
+      .replace(/\D/g, '');
+
+  return digits
+    ? digits.padStart(7, '0')
+    : '';
+}
+
+
+function normalizeText(value: string) {
 
   return String(value || '')
     .toLowerCase()
@@ -246,93 +270,101 @@ function normalizeText(
 }
 
 
-/* =========================================================
- * TSV
- * ========================================================= */
-
-function parseTSV(
-  text: string
-): string[][] {
-
-  return text
-    .replace(/\r/g, '')
-    .split('\n')
-    .filter(
-      line => line.trim() !== ''
-    )
-    .map(
-      line => line.split('\t')
-    );
-}
-
-
-/* =========================================================
- * 전화번호
- * ========================================================= */
-
-function formatPhone(
-  value: string
-) {
+function formatPhone(value: string) {
 
   const digits =
     String(value || '')
       .replace(/\D/g, '')
       .slice(0, 11);
 
-  if (
-    digits.length <= 3
-  ) {
+  if (digits.length <= 3) {
     return digits;
   }
 
-  if (
-    digits.length <= 7
-  ) {
-
-    return (
-      `${digits.slice(0, 3)}-${digits.slice(3)}`
-    );
+  if (digits.length <= 7) {
+    return `${digits.slice(0, 3)}-${digits.slice(3)}`;
   }
 
-  return (
-    `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7, 11)}`
-  );
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
 }
 
 
-/* =========================================================
- * 날짜
- * ========================================================= */
+function parseTSV(text: string): string[][] {
 
-function formatOccurredDateTime(
-  year: string,
-  month: string,
-  day: string,
-  hour: string,
-  minute: string
+  return text
+    .replace(/\r/g, '')
+    .split('\n')
+    .filter(line => line.trim())
+    .map(line => line.split('\t'));
+}
+
+
+function daysInMonth(
+  year: number,
+  month: number
 ) {
 
-  if (
-    !year ||
-    !month ||
-    !day ||
-    !hour ||
-    !minute
-  ) {
-
-    return '';
-  }
-
-  return (
-    `${year}년 ${Number(month)}월 ${Number(day)}일 ` +
-    `${pad2(hour)}:${pad2(minute)} 경`
-  );
+  return new Date(
+    year,
+    month,
+    0
+  ).getDate();
 }
 
 
-/* =========================================================
- * PDF 텍스트
- * ========================================================= */
+function wrapText(
+  text: string,
+  font: any,
+  size: number,
+  maxWidth: number
+) {
+
+  const result: string[] = [];
+
+  for (
+    const paragraph of String(text || '').split('\n')
+  ) {
+
+    if (!paragraph) {
+      result.push('');
+      continue;
+    }
+
+    let line = '';
+
+    for (const char of paragraph) {
+
+      const test =
+        line + char;
+
+      const width =
+        font.widthOfTextAtSize(
+          test,
+          size
+        );
+
+      if (
+        width > maxWidth &&
+        line
+      ) {
+
+        result.push(line);
+        line = char;
+
+      } else {
+
+        line = test;
+      }
+    }
+
+    if (line) {
+      result.push(line);
+    }
+  }
+
+  return result;
+}
+
 
 function drawText(
   page: any,
@@ -361,75 +393,7 @@ function drawText(
 
 
 /* =========================================================
- * PDF 줄바꿈
- * ========================================================= */
-
-function wrapText(
-  text: string,
-  font: any,
-  size: number,
-  maxWidth: number
-): string[] {
-
-  const result: string[] = [];
-
-  const paragraphs =
-    String(text || '')
-      .split('\n');
-
-  for (
-    const paragraph of paragraphs
-  ) {
-
-    if (!paragraph) {
-      result.push('');
-      continue;
-    }
-
-    let line = '';
-
-    for (
-      const char of paragraph
-    ) {
-
-      const test =
-        line + char;
-
-      const width =
-        font.widthOfTextAtSize(
-          test,
-          size
-        );
-
-      if (
-        width > maxWidth &&
-        line
-      ) {
-
-        result.push(line);
-
-        line = char;
-
-      } else {
-
-        line = test;
-      }
-    }
-
-    if (line) {
-      result.push(line);
-    }
-  }
-
-  return result;
-}
-
-
-/* =========================================================
  * PDF 신고내용
- *
- * 시간은 왼쪽
- * 내용은 오른쪽
  * ========================================================= */
 
 function drawReportEntries(
@@ -438,35 +402,25 @@ function drawReportEntries(
   font: any
 ) {
 
-  /*
-   * A4 594 x 842
-   *
-   * 본문 영역:
-   * x 약 122 ~ 537
-   * y 약 298 ~ 503
-   */
+  let y =
+    PDF_POS.reportTime.y;
 
-  const timeX = 132;
-  const contentX = 185;
+  const timeX =
+    PDF_POS.reportTime.x;
 
-  const startY = 472;
+  const contentX =
+    PDF_POS.reportContent.x;
 
-  const fontSize = 9.5;
+  const size =
+    PDF_POS.reportTime.size;
+
   const lineHeight = 13;
 
-  const contentWidth = 345;
+  const maxWidth = 350;
 
-  const bottomY = 310;
+  for (const entry of entries) {
 
-  let y = startY;
-
-  for (
-    const entry of entries
-  ) {
-
-    if (
-      y < bottomY
-    ) {
+    if (y < 300) {
       break;
     }
 
@@ -481,7 +435,7 @@ function drawReportEntries(
       time,
       timeX,
       y,
-      fontSize,
+      size,
       font
     );
 
@@ -489,26 +443,13 @@ function drawReportEntries(
       wrapText(
         entry.content,
         font,
-        fontSize,
-        contentWidth
+        size,
+        maxWidth
       );
 
-    if (
-      lines.length === 0
-    ) {
+    for (const line of lines) {
 
-      y -= lineHeight;
-
-      continue;
-    }
-
-    for (
-      const line of lines
-    ) {
-
-      if (
-        y < bottomY
-      ) {
+      if (y < 300) {
         break;
       }
 
@@ -517,7 +458,7 @@ function drawReportEntries(
         line,
         contentX,
         y,
-        fontSize,
+        size,
         font
       );
 
@@ -540,113 +481,91 @@ function drawCauseAndAction(
   font: any
 ) {
 
-  const labelX = 132;
-  const valueX = 165;
-
-  const size = 9.5;
-  const lineHeight = 13;
-
-  const width = 350;
+  const size = 9;
 
   /*
-   * 원인 영역
+   * 원인
    */
-
-  let y = 268;
 
   drawText(
     page,
     '원인',
-    labelX,
-    y,
-    size,
+    PDF_POS.causeLabel.x,
+    PDF_POS.causeLabel.y,
+    PDF_POS.causeLabel.size,
     font
   );
+
+  let causeY =
+    PDF_POS.cause.y;
 
   const causeLines =
     wrapText(
       cause,
       font,
       size,
-      width
+      350
     );
 
-  let causeY =
-    y - 16;
+  for (const line of causeLines) {
 
-  for (
-    const line of causeLines
-  ) {
-
-    if (
-      causeY < 215
-    ) {
+    if (causeY < 245) {
       break;
     }
 
     drawText(
       page,
       line,
-      valueX,
+      PDF_POS.cause.x,
       causeY,
       size,
       font
     );
 
-    causeY -= lineHeight;
+    causeY -= 13;
   }
 
 
   /*
-   * 조치 영역
+   * 조치
    */
-
-  let actionY =
-    Math.min(
-      causeY - 12,
-      195
-    );
 
   drawText(
     page,
     '조치',
-    labelX,
-    actionY,
-    size,
+    PDF_POS.actionLabel.x,
+    PDF_POS.actionLabel.y,
+    PDF_POS.actionLabel.size,
     font
   );
+
+  let actionY =
+    PDF_POS.action.y;
 
   const actionLines =
     wrapText(
       action,
       font,
       size,
-      width
+      350
     );
 
-  let textY =
-    actionY - 16;
+  for (const line of actionLines) {
 
-  for (
-    const line of actionLines
-  ) {
-
-    if (
-      textY < 105
-    ) {
+    if (actionY < 110) {
       break;
     }
 
     drawText(
       page,
       line,
-      valueX,
-      textY,
+      PDF_POS.action.x,
+      actionY,
       size,
       font
     );
 
-    textY -= lineHeight;
+    actionY -= 13;
   }
 }
 
@@ -669,7 +588,9 @@ export function TrappedReportSection({
     useState('');
 
 
-  /* 신고자 */
+  /*
+   * ① 신고자
+   */
 
   const [reporterName, setReporterName] =
     useState('');
@@ -678,7 +599,9 @@ export function TrappedReportSection({
     useState('');
 
 
-  /* 신고 현황 */
+  /*
+   * ② 신고 현황
+   */
 
   const [siteName, setSiteName] =
     useState('');
@@ -690,9 +613,7 @@ export function TrappedReportSection({
     useState('');
 
 
-  /* 자동완성 활성 필드 */
-
-  const [activeAutoField, setActiveAutoField] =
+  const [activeField, setActiveField] =
     useState<
       'site' |
       'address' |
@@ -701,16 +622,21 @@ export function TrappedReportSection({
     >(null);
 
 
-  /* 발생 일시 */
+  /*
+   * 발생 일시
+   */
+
+  const now =
+    new Date();
 
   const [occurredYear, setOccurredYear] =
-    useState('');
+    useState(String(now.getFullYear()));
 
   const [occurredMonth, setOccurredMonth] =
-    useState('');
+    useState(String(now.getMonth() + 1));
 
   const [occurredDay, setOccurredDay] =
-    useState('');
+    useState(String(now.getDate()));
 
   const [occurredHour, setOccurredHour] =
     useState('');
@@ -719,7 +645,9 @@ export function TrappedReportSection({
     useState('');
 
 
-  /* 신고내용 */
+  /*
+   * ③ 신고내용
+   */
 
   const [reportEntries, setReportEntries] =
     useState<ReportEntry[]>([
@@ -731,26 +659,29 @@ export function TrappedReportSection({
       }
     ]);
 
-  const [nextEntryId, setNextEntryId] =
+  const [nextId, setNextId] =
     useState(2);
 
 
-  /* 원인 / 조치 */
+  /*
+   * ④ 원인
+   */
 
   const [cause, setCause] =
     useState('');
+
+
+  /*
+   * ⑤ 조치
+   */
 
   const [action, setAction] =
     useState('');
 
 
-  /* 작성자 */
-
-  const [writer, setWriter] =
-    useState('');
-
-
-  /* PDF */
+  /*
+   * PDF
+   */
 
   const [generating, setGenerating] =
     useState(false);
@@ -760,17 +691,14 @@ export function TrappedReportSection({
 
 
   /* =====================================================
-   * 스프레드시트 읽기
+   * DB 불러오기
    * ===================================================== */
 
   useEffect(() => {
 
     let cancelled = false;
 
-    async function loadSheet() {
-
-      setLoadingSheet(true);
-      setSheetError('');
+    async function load() {
 
       try {
 
@@ -784,7 +712,7 @@ export function TrappedReportSection({
 
         if (!response.ok) {
           throw new Error(
-            '스프레드시트 응답 오류'
+            '스프레드시트를 불러오지 못했습니다.'
           );
         }
 
@@ -794,7 +722,7 @@ export function TrappedReportSection({
         const parsed =
           parseTSV(text);
 
-        const converted =
+        const data =
           parsed
             .map(row => ({
               site:
@@ -820,18 +748,15 @@ export function TrappedReportSection({
             );
 
         if (!cancelled) {
-          setRows(converted);
+          setRows(data);
         }
 
       } catch (error: any) {
 
-        console.error(error);
-
         if (!cancelled) {
-
           setSheetError(
             error?.message ||
-            '스프레드시트를 불러오지 못했습니다.'
+            'DB 연결 오류'
           );
         }
 
@@ -843,7 +768,7 @@ export function TrappedReportSection({
       }
     }
 
-    loadSheet();
+    load();
 
     return () => {
       cancelled = true;
@@ -853,61 +778,7 @@ export function TrappedReportSection({
 
 
   /* =====================================================
-   * 날짜에 맞는 일수
-   * ===================================================== */
-
-  useEffect(() => {
-
-    if (
-      !occurredYear ||
-      !occurredMonth
-    ) {
-      return;
-    }
-
-    const maxDay =
-      daysInMonth(
-        Number(occurredYear),
-        Number(occurredMonth)
-      );
-
-    if (
-      occurredDay &&
-      Number(occurredDay) > maxDay
-    ) {
-
-      setOccurredDay(
-        String(maxDay)
-      );
-    }
-
-  }, [
-    occurredYear,
-    occurredMonth,
-    occurredDay
-  ]);
-
-
-  /* =====================================================
-   * PDF URL 정리
-   * ===================================================== */
-
-  useEffect(() => {
-
-    return () => {
-
-      if (previewUrl) {
-        URL.revokeObjectURL(
-          previewUrl
-        );
-      }
-    };
-
-  }, [previewUrl]);
-
-
-  /* =====================================================
-   * 자동완성 목록
+   * 자동완성
    * ===================================================== */
 
   const siteOptions =
@@ -923,7 +794,6 @@ export function TrappedReportSection({
       [rows]
     );
 
-
   const addressOptions =
     useMemo(
       () =>
@@ -936,7 +806,6 @@ export function TrappedReportSection({
         ),
       [rows]
     );
-
 
   const elevatorOptions =
     useMemo(
@@ -952,70 +821,24 @@ export function TrappedReportSection({
     );
 
 
-  /* 날짜 */
-
-  const dayOptions =
-    useMemo(() => {
-
-      if (
-        !occurredYear ||
-        !occurredMonth
-      ) {
-
-        return Array.from(
-          { length: 31 },
-          (_, i) => i + 1
-        );
-      }
-
-      return Array.from(
-        {
-          length:
-            daysInMonth(
-              Number(occurredYear),
-              Number(occurredMonth)
-            )
-        },
-        (_, i) => i + 1
-      );
-
-    }, [
-      occurredYear,
-      occurredMonth
-    ]);
-
-
-  /* =====================================================
-   * 행 찾기
-   * ===================================================== */
-
   function findRow(
     type:
       | 'site'
       | 'address'
       | 'elevator',
     value: string
-  ): SheetRow | null {
+  ) {
 
-    if (
-      !value.trim()
-    ) {
+    if (!value.trim()) {
       return null;
     }
 
-
-    if (
-      type === 'elevator'
-    ) {
+    if (type === 'elevator') {
 
       const target =
         normalizeElevator(
           value
         );
-
-      if (!target) {
-        return null;
-      }
 
       return (
         rows.find(
@@ -1027,10 +850,7 @@ export function TrappedReportSection({
       );
     }
 
-
-    if (
-      type === 'site'
-    ) {
+    if (type === 'site') {
 
       const target =
         normalizeText(
@@ -1046,7 +866,6 @@ export function TrappedReportSection({
         ) || null
       );
     }
-
 
     const target =
       normalizeText(
@@ -1066,10 +885,6 @@ export function TrappedReportSection({
   }
 
 
-  /* =====================================================
-   * 자동완성 선택
-   * ===================================================== */
-
   function applyRow(
     row: SheetRow
   ) {
@@ -1086,79 +901,56 @@ export function TrappedReportSection({
       row.elevator
     );
 
-    setActiveAutoField(
+    setActiveField(
       null
     );
   }
 
 
-  function handleSiteChange(
+  function filterOptions(
+    type:
+      | 'site'
+      | 'address'
+      | 'elevator',
     value: string
   ) {
 
-    setSiteName(
-      value
-    );
+    let source: string[] = [];
 
-    const exact =
-      findRow(
-        'site',
-        value
-      );
-
-    if (exact) {
-      applyRow(exact);
+    if (type === 'site') {
+      source = siteOptions;
     }
-  }
 
-
-  function handleAddressChange(
-    value: string
-  ) {
-
-    const normalized =
-      value.trim()
-        ? normalizeAddress(value)
-        : '';
-
-    setAddress(
-      normalized
-    );
-
-    const exact =
-      findRow(
-        'address',
-        normalized
-      );
-
-    if (exact) {
-      applyRow(exact);
+    if (type === 'address') {
+      source = addressOptions;
     }
-  }
 
-
-  function handleElevatorChange(
-    value: string
-  ) {
-
-    const formatted =
-      formatElevatorNo(
-        value
-      );
-
-    setElevatorNo(
-      formatted
-    );
-
-    const exact =
-      findRow(
-        'elevator',
-        formatted
-      );
-
-    if (exact) {
-      applyRow(exact);
+    if (type === 'elevator') {
+      source = elevatorOptions;
     }
+
+    const query =
+      type === 'elevator'
+        ? value.replace(/\D/g, '')
+        : normalizeText(value);
+
+    if (!query) {
+      return source.slice(0, 8);
+    }
+
+    return source
+      .filter(option => {
+
+        const normalized =
+          type === 'elevator'
+            ? option.replace(/\D/g, '')
+            : normalizeText(option);
+
+        return normalized.includes(
+          query
+        );
+      })
+      .slice(0, 8);
   }
 
 
@@ -1192,14 +984,11 @@ export function TrappedReportSection({
 
   function addEntry() {
 
-    const id =
-      nextEntryId;
-
     setReportEntries(
       current => [
         ...current,
         {
-          id,
+          id: nextId,
           hour: '',
           minute: '',
           content: ''
@@ -1207,9 +996,8 @@ export function TrappedReportSection({
       ]
     );
 
-    setNextEntryId(
-      current =>
-        current + 1
+    setNextId(
+      value => value + 1
     );
   }
 
@@ -1222,7 +1010,7 @@ export function TrappedReportSection({
       current => {
 
         if (
-          current.length === 1
+          current.length <= 1
         ) {
           return current;
         }
@@ -1237,81 +1025,10 @@ export function TrappedReportSection({
 
 
   /* =====================================================
-   * 자동완성 필터
-   * ===================================================== */
-
-  function getFilteredOptions(
-    type:
-      | 'site'
-      | 'address'
-      | 'elevator',
-    value: string
-  ) {
-
-    let source: string[] = [];
-
-    if (
-      type === 'site'
-    ) {
-      source = siteOptions;
-    }
-
-    if (
-      type === 'address'
-    ) {
-      source = addressOptions;
-    }
-
-    if (
-      type === 'elevator'
-    ) {
-      source = elevatorOptions;
-    }
-
-    const query =
-      type === 'elevator'
-        ? value
-            .replace(/\D/g, '')
-        : normalizeText(
-            value
-          );
-
-    if (!query) {
-      return source.slice(
-        0,
-        8
-      );
-    }
-
-    return source
-      .filter(option => {
-
-        const normalized =
-          type === 'elevator'
-            ? option.replace(
-                /\D/g,
-                ''
-              )
-            : normalizeText(
-                option
-              );
-
-        return normalized.includes(
-          query
-        );
-      })
-      .slice(
-        0,
-        8
-      );
-  }
-
-
-  /* =====================================================
    * PDF 생성
    * ===================================================== */
 
-  async function createPDF(): Promise<Uint8Array> {
+  async function createPDF() {
 
     const response =
       await fetch(
@@ -1325,12 +1042,12 @@ export function TrappedReportSection({
       );
     }
 
-    const templateBytes =
+    const bytes =
       await response.arrayBuffer();
 
     const pdfDoc =
       await PDFDocument.load(
-        templateBytes
+        bytes
       );
 
     pdfDoc.registerFontkit(
@@ -1366,25 +1083,16 @@ export function TrappedReportSection({
       pdfDoc.getPages()[0];
 
 
-    /*
-     * =====================================================
+    /* ===================================================
      * ① 신고자
-     * =====================================================
-     *
-     * PDF 원본 A4:
-     * 594 x 842
-     *
-     * 신고자 영역:
-     * 이름     x 약 122~325
-     * 연락처   x 약 325~537
-     */
+     * =================================================== */
 
     drawText(
       page,
       reporterName,
-      220,
-      614,
-      10.5,
+      PDF_POS.reporterName.x,
+      PDF_POS.reporterName.y,
+      PDF_POS.reporterName.size,
       font
     );
 
@@ -1393,53 +1101,43 @@ export function TrappedReportSection({
       formatPhone(
         reporterPhone
       ),
-      340,
-      614,
-      10.5,
+      PDF_POS.reporterPhone.x,
+      PDF_POS.reporterPhone.y,
+      PDF_POS.reporterPhone.size,
       font
     );
 
 
-    /*
-     * =====================================================
+    /* ===================================================
      * ② 신고 현황
-     * =====================================================
-     */
-
-    /* 현장명 */
+     * =================================================== */
 
     drawText(
       page,
       siteName,
-      220,
-      566,
-      10.5,
+      PDF_POS.siteName.x,
+      PDF_POS.siteName.y,
+      PDF_POS.siteName.size,
       font
     );
-
-
-    /* 소재지 */
 
     drawText(
       page,
       address,
-      340,
-      566,
-      9.5,
+      PDF_POS.address.x,
+      PDF_POS.address.y,
+      PDF_POS.address.size,
       font
     );
-
-
-    /* 승강기 번호 */
 
     drawText(
       page,
       formatElevatorNo(
         elevatorNo
       ),
-      220,
-      519,
-      10.5,
+      PDF_POS.elevatorNo.x,
+      PDF_POS.elevatorNo.y,
+      PDF_POS.elevatorNo.size,
       font
     );
 
@@ -1448,31 +1146,63 @@ export function TrappedReportSection({
 
     drawText(
       page,
-      formatOccurredDateTime(
-        occurredYear,
-        occurredMonth,
-        occurredDay,
-        occurredHour,
-        occurredMinute
-      ),
-      340,
-      519,
-      9.5,
+      occurredYear
+        ? `${occurredYear}년`
+        : '',
+      PDF_POS.occurredYear.x,
+      PDF_POS.occurredYear.y,
+      PDF_POS.occurredYear.size,
+      font
+    );
+
+    drawText(
+      page,
+      occurredMonth
+        ? `${occurredMonth}월`
+        : '',
+      PDF_POS.occurredMonth.x,
+      PDF_POS.occurredMonth.y,
+      PDF_POS.occurredMonth.size,
+      font
+    );
+
+    drawText(
+      page,
+      occurredDay
+        ? `${occurredDay}일`
+        : '',
+      PDF_POS.occurredDay.x,
+      PDF_POS.occurredDay.y,
+      PDF_POS.occurredDay.size,
+      font
+    );
+
+    drawText(
+      page,
+      occurredHour
+        ? `${pad2(occurredHour)}시`
+        : '',
+      PDF_POS.occurredHour.x,
+      PDF_POS.occurredHour.y,
+      PDF_POS.occurredHour.size,
+      font
+    );
+
+    drawText(
+      page,
+      occurredMinute
+        ? `${pad2(occurredMinute)}분`
+        : '',
+      PDF_POS.occurredMinute.x,
+      PDF_POS.occurredMinute.y,
+      PDF_POS.occurredMinute.size,
       font
     );
 
 
-    /*
-     * =====================================================
+    /* ===================================================
      * ③ 신고내용
-     * =====================================================
-     *
-     * 원본의 "신고내용..." 안내문 아래부터 작성
-     *
-     * 시간     내용
-     * 21:05    신고 접수
-     *          현장으로 이동
-     */
+     * =================================================== */
 
     drawReportEntries(
       page,
@@ -1481,11 +1211,9 @@ export function TrappedReportSection({
     );
 
 
-    /*
-     * =====================================================
-     * ④ 원인 / ⑤ 조치
-     * =====================================================
-     */
+    /* ===================================================
+     * ④ 원인
+     * =================================================== */
 
     drawCauseAndAction(
       page,
@@ -1495,35 +1223,17 @@ export function TrappedReportSection({
     );
 
 
-    /*
-     * =====================================================
-     * 작성자
-     * =====================================================
-     */
-
-    drawText(
-      page,
-      writer,
-      320,
-      660,
-      10.5,
-      font
-    );
-
-
     return await pdfDoc.save();
   }
 
 
   /* =====================================================
-   * PDF 다운로드
+   * PDF 미리보기
    * ===================================================== */
 
-  async function handleDownload() {
+  async function handlePreview() {
 
-    setGenerating(
-      true
-    );
+    setGenerating(true);
 
     try {
 
@@ -1534,8 +1244,7 @@ export function TrappedReportSection({
         new Blob(
           [bytes],
           {
-            type:
-              'application/pdf'
+            type: 'application/pdf'
           }
         );
 
@@ -1544,42 +1253,19 @@ export function TrappedReportSection({
           blob
         );
 
-      const fileName =
-        `${safeFileName(siteName) || '승객갇힘'}_` +
-        `${safeFileName(elevatorNo) || '보고서'}_` +
-        `승객갇힘보고서.pdf`;
-
-      const a =
-        document.createElement(
-          'a'
+      if (previewUrl) {
+        URL.revokeObjectURL(
+          previewUrl
         );
+      }
 
-      a.href = url;
-      a.download = fileName;
-
-      document.body.appendChild(
-        a
+      setPreviewUrl(
+        url
       );
 
-      a.click();
+    } catch (error: any) {
 
-      a.remove();
-
-      setTimeout(
-        () =>
-          URL.revokeObjectURL(
-            url
-          ),
-        2000
-      );
-
-    } catch (
-      error: any
-    ) {
-
-      console.error(
-        error
-      );
+      console.error(error);
 
       alert(
         error?.message ||
@@ -1588,22 +1274,18 @@ export function TrappedReportSection({
 
     } finally {
 
-      setGenerating(
-        false
-      );
+      setGenerating(false);
     }
   }
 
 
   /* =====================================================
-   * 미리보기
+   * 다운로드
    * ===================================================== */
 
-  async function handlePreview() {
+  async function handleDownload() {
 
-    setGenerating(
-      true
-    );
+    setGenerating(true);
 
     try {
 
@@ -1614,8 +1296,7 @@ export function TrappedReportSection({
         new Blob(
           [bytes],
           {
-            type:
-              'application/pdf'
+            type: 'application/pdf'
           }
         );
 
@@ -1624,106 +1305,76 @@ export function TrappedReportSection({
           blob
         );
 
-      setPreviewUrl(
-        oldUrl => {
+      const a =
+        document.createElement('a');
 
-          if (oldUrl) {
-            URL.revokeObjectURL(
-              oldUrl
-            );
-          }
+      a.href = url;
 
-          return url;
-        }
+      a.download =
+        `${siteName || '승객갇힘'}_승객갇힘보고서.pdf`;
+
+      document.body.appendChild(a);
+
+      a.click();
+
+      a.remove();
+
+      setTimeout(
+        () =>
+          URL.revokeObjectURL(url),
+        1000
       );
 
-    } catch (
-      error: any
-    ) {
+    } catch (error: any) {
 
-      console.error(
-        error
-      );
+      console.error(error);
 
       alert(
         error?.message ||
-        'PDF 미리보기 중 오류가 발생했습니다.'
+        'PDF 생성 중 오류가 발생했습니다.'
       );
 
     } finally {
 
-      setGenerating(
-        false
-      );
+      setGenerating(false);
     }
   }
 
 
   /* =====================================================
-   * 초기화
+   * 화면
    * ===================================================== */
-
-  function resetForm() {
-
-    setReporterName('');
-    setReporterPhone('');
-
-    setSiteName('');
-    setAddress('');
-    setElevatorNo('');
-
-    setOccurredYear('');
-    setOccurredMonth('');
-    setOccurredDay('');
-    setOccurredHour('');
-    setOccurredMinute('');
-
-    setReportEntries([
-      {
-        id: 1,
-        hour: '',
-        minute: '',
-        content: ''
-      }
-    ]);
-
-    setNextEntryId(2);
-
-    setCause('');
-    setAction('');
-
-    setWriter('');
-
-    setActiveAutoField(
-      null
-    );
-
-    if (previewUrl) {
-      URL.revokeObjectURL(
-        previewUrl
-      );
-    }
-
-    setPreviewUrl('');
-  }
-
 
   return (
     <div className="w-full space-y-6">
 
-      {/* =================================================
-          상단
-      ================================================= */}
+      {/* 상단 */}
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="
+        flex
+        flex-col
+        sm:flex-row
+        sm:items-center
+        sm:justify-between
+        gap-4
+      ">
 
         <div>
 
-          <h1 className="text-2xl sm:text-3xl font-bold text-white">
+          <h1 className="
+            text-2xl
+            sm:text-3xl
+            font-bold
+            text-white
+          ">
             승객갇힘 보고서 작성
           </h1>
 
-          <p className="text-sm text-slate-400 mt-2">
+          <p className="
+            text-sm
+            text-slate-400
+            mt-2
+          ">
             현장명, 소재지 또는 승강기 번호를 입력하면 바로 아래에 검색 결과가 표시됩니다.
           </p>
 
@@ -1733,13 +1384,13 @@ export function TrappedReportSection({
           type="button"
           onClick={onBack}
           className="
-            px-4 py-2
+            px-4
+            py-2
             rounded-lg
             bg-slate-800
             hover:bg-slate-700
             text-sm
             font-semibold
-            transition
           "
         >
           ← 홈으로
@@ -1748,9 +1399,7 @@ export function TrappedReportSection({
       </div>
 
 
-      {/* =================================================
-          DB 상태
-      ================================================= */}
+      {/* DB */}
 
       <div className="
         rounded-xl
@@ -1763,19 +1412,21 @@ export function TrappedReportSection({
         {loadingSheet ? (
 
           <div className="text-sm text-slate-400">
-            스프레드시트 정보를 불러오는 중...
+            현장정보를 불러오는 중...
           </div>
 
         ) : sheetError ? (
 
           <div className="text-sm text-red-400">
-            스프레드시트 오류 : {sheetError}
+            {sheetError}
           </div>
 
         ) : (
 
           <div className="text-sm text-emerald-400">
-            ✓ 현장정보 DB 연결 완료 ({rows.length.toLocaleString()}건)
+            ✓ 현장정보 DB 연결 완료
+            {' '}
+            ({rows.length.toLocaleString()}건)
           </div>
 
         )}
@@ -1784,9 +1435,7 @@ export function TrappedReportSection({
 
 
       {/* =================================================
-          ① 신고자 + ② 신고 현황
-          PC : 좌우
-          모바일 : 위아래
+          ① + ②
       ================================================= */}
 
       <div className="
@@ -1794,12 +1443,10 @@ export function TrappedReportSection({
         grid-cols-1
         lg:grid-cols-2
         gap-6
-        items-start
       ">
 
-        {/* =================================================
-            ① 신고자
-        ================================================= */}
+
+        {/* ① 신고자 */}
 
         <section className="
           rounded-2xl
@@ -1810,7 +1457,11 @@ export function TrappedReportSection({
           sm:p-6
         ">
 
-          <h2 className="text-lg font-bold mb-5">
+          <h2 className="
+            text-lg
+            font-bold
+            mb-5
+          ">
             ① 신고자
           </h2>
 
@@ -1819,9 +1470,7 @@ export function TrappedReportSection({
             <Field
               label="성명"
               value={reporterName}
-              onChange={
-                setReporterName
-              }
+              onChange={setReporterName}
               placeholder="신고자 성명"
             />
 
@@ -1831,9 +1480,7 @@ export function TrappedReportSection({
               onChange={
                 value =>
                   setReporterPhone(
-                    formatPhone(
-                      value
-                    )
+                    formatPhone(value)
                   )
               }
               placeholder="010-0000-0000"
@@ -1843,20 +1490,10 @@ export function TrappedReportSection({
 
           </div>
 
-          <p className="
-            text-xs
-            text-slate-500
-            mt-3
-          ">
-            01000000000 또는 010-0000-0000 입력 → 010-0000-0000 형식으로 자동 정리
-          </p>
-
         </section>
 
 
-        {/* =================================================
-            ② 신고 현황
-        ================================================= */}
+        {/* ② 신고 현황 */}
 
         <section className="
           rounded-2xl
@@ -1867,36 +1504,48 @@ export function TrappedReportSection({
           sm:p-6
         ">
 
-          <h2 className="text-lg font-bold mb-5">
+          <h2 className="
+            text-lg
+            font-bold
+            mb-5
+          ">
             ② 신고 현황
           </h2>
 
 
           <div className="space-y-4">
 
-            {/* 현장명 */}
-
-            <AutocompleteField
+            <Autocomplete
               label="현장명"
               value={siteName}
               placeholder="현장명을 입력하세요"
               options={
-                getFilteredOptions(
+                filterOptions(
                   'site',
                   siteName
                 )
               }
-              showOptions={
-                activeAutoField ===
-                'site'
+              active={
+                activeField === 'site'
               }
               onFocus={() =>
-                setActiveAutoField(
-                  'site'
-                )
+                setActiveField('site')
               }
               onChange={
-                handleSiteChange
+                value => {
+
+                  setSiteName(value);
+
+                  const found =
+                    findRow(
+                      'site',
+                      value
+                    );
+
+                  if (found) {
+                    applyRow(found);
+                  }
+                }
               }
               onSelect={
                 value => {
@@ -1908,38 +1557,49 @@ export function TrappedReportSection({
                     );
 
                   if (found) {
-                    applyRow(
-                      found
-                    );
+                    applyRow(found);
                   }
                 }
               }
             />
 
 
-            {/* 소재지 */}
-
-            <AutocompleteField
+            <Autocomplete
               label="소재지"
               value={address}
               placeholder="주소를 입력하세요"
               options={
-                getFilteredOptions(
+                filterOptions(
                   'address',
                   address
                 )
               }
-              showOptions={
-                activeAutoField ===
-                'address'
+              active={
+                activeField === 'address'
               }
               onFocus={() =>
-                setActiveAutoField(
-                  'address'
-                )
+                setActiveField('address')
               }
               onChange={
-                handleAddressChange
+                value => {
+
+                  const normalized =
+                    normalizeAddress(value);
+
+                  setAddress(
+                    normalized
+                  );
+
+                  const found =
+                    findRow(
+                      'address',
+                      normalized
+                    );
+
+                  if (found) {
+                    applyRow(found);
+                  }
+                }
               }
               onSelect={
                 value => {
@@ -1951,38 +1611,51 @@ export function TrappedReportSection({
                     );
 
                   if (found) {
-                    applyRow(
-                      found
-                    );
+                    applyRow(found);
                   }
                 }
               }
             />
 
 
-            {/* 승강기 번호 */}
-
-            <AutocompleteField
+            <Autocomplete
               label="승강기 번호"
               value={elevatorNo}
               placeholder="0000-000"
               options={
-                getFilteredOptions(
+                filterOptions(
                   'elevator',
                   elevatorNo
                 )
               }
-              showOptions={
-                activeAutoField ===
-                'elevator'
+              active={
+                activeField === 'elevator'
               }
               onFocus={() =>
-                setActiveAutoField(
-                  'elevator'
-                )
+                setActiveField('elevator')
               }
               onChange={
-                handleElevatorChange
+                value => {
+
+                  const formatted =
+                    formatElevatorNo(
+                      value
+                    );
+
+                  setElevatorNo(
+                    formatted
+                  );
+
+                  const found =
+                    findRow(
+                      'elevator',
+                      formatted
+                    );
+
+                  if (found) {
+                    applyRow(found);
+                  }
+                }
               }
               onSelect={
                 value => {
@@ -1994,9 +1667,7 @@ export function TrappedReportSection({
                     );
 
                   if (found) {
-                    applyRow(
-                      found
-                    );
+                    applyRow(found);
                   }
                 }
               }
@@ -2025,21 +1696,21 @@ export function TrappedReportSection({
                 gap-2
               ">
 
-                <SelectField
-                  value={
-                    occurredYear
-                  }
-                  onChange={
-                    setOccurredYear
-                  }
+                <Select
+                  value={occurredYear}
+                  onChange={setOccurredYear}
                   placeholder="연도"
                   options={
-                    YEAR_OPTIONS.map(
+                    Array.from(
+                      { length: 16 },
+                      (_, i) =>
+                        new Date().getFullYear()
+                        - 5
+                        + i
+                    ).map(
                       value => ({
                         value:
-                          String(
-                            value
-                          ),
+                          String(value),
                         label:
                           `${value}년`
                       })
@@ -2047,21 +1718,18 @@ export function TrappedReportSection({
                   }
                 />
 
-                <SelectField
-                  value={
-                    occurredMonth
-                  }
-                  onChange={
-                    setOccurredMonth
-                  }
+                <Select
+                  value={occurredMonth}
+                  onChange={setOccurredMonth}
                   placeholder="월"
                   options={
-                    MONTH_OPTIONS.map(
+                    Array.from(
+                      { length: 12 },
+                      (_, i) => i + 1
+                    ).map(
                       value => ({
                         value:
-                          String(
-                            value
-                          ),
+                          String(value),
                         label:
                           `${value}월`
                       })
@@ -2069,21 +1737,31 @@ export function TrappedReportSection({
                   }
                 />
 
-                <SelectField
-                  value={
-                    occurredDay
-                  }
-                  onChange={
-                    setOccurredDay
-                  }
+                <Select
+                  value={occurredDay}
+                  onChange={setOccurredDay}
                   placeholder="일"
                   options={
-                    dayOptions.map(
+                    Array.from(
+                      {
+                        length:
+                          occurredYear &&
+                          occurredMonth
+                            ? daysInMonth(
+                                Number(
+                                  occurredYear
+                                ),
+                                Number(
+                                  occurredMonth
+                                )
+                              )
+                            : 31
+                      },
+                      (_, i) => i + 1
+                    ).map(
                       value => ({
                         value:
-                          String(
-                            value
-                          ),
+                          String(value),
                         label:
                           `${value}일`
                       })
@@ -2103,21 +1781,18 @@ export function TrappedReportSection({
                 mt-2
               ">
 
-                <SelectField
-                  value={
-                    occurredHour
-                  }
-                  onChange={
-                    setOccurredHour
-                  }
+                <Select
+                  value={occurredHour}
+                  onChange={setOccurredHour}
                   placeholder="시"
                   options={
-                    HOUR_OPTIONS.map(
+                    Array.from(
+                      { length: 24 },
+                      (_, i) => i
+                    ).map(
                       value => ({
                         value:
-                          String(
-                            value
-                          ),
+                          String(value),
                         label:
                           `${pad2(value)}시`
                       })
@@ -2125,21 +1800,18 @@ export function TrappedReportSection({
                   }
                 />
 
-                <SelectField
-                  value={
-                    occurredMinute
-                  }
-                  onChange={
-                    setOccurredMinute
-                  }
+                <Select
+                  value={occurredMinute}
+                  onChange={setOccurredMinute}
                   placeholder="분"
                   options={
-                    MINUTE_OPTIONS.map(
+                    Array.from(
+                      { length: 60 },
+                      (_, i) => i
+                    ).map(
                       value => ({
                         value:
-                          String(
-                            value
-                          ),
+                          String(value),
                         label:
                           `${pad2(value)}분`
                       })
@@ -2148,14 +1820,6 @@ export function TrappedReportSection({
                 />
 
               </div>
-
-              <p className="
-                text-xs
-                text-slate-500
-                mt-2
-              ">
-                시간은 00~23시 24시간제로 선택합니다.
-              </p>
 
             </div>
 
@@ -2181,17 +1845,17 @@ export function TrappedReportSection({
 
         <div className="
           flex
-          flex-col
-          sm:flex-row
-          sm:items-center
-          sm:justify-between
-          gap-3
+          items-center
+          justify-between
           mb-5
         ">
 
           <div>
 
-            <h2 className="text-lg font-bold">
+            <h2 className="
+              text-lg
+              font-bold
+            ">
               ③ 신고내용
             </h2>
 
@@ -2227,10 +1891,7 @@ export function TrappedReportSection({
         <div className="space-y-4">
 
           {reportEntries.map(
-            (
-              entry,
-              index
-            ) => (
+            (entry, index) => (
 
               <div
                 key={entry.id}
@@ -2238,7 +1899,7 @@ export function TrappedReportSection({
                   rounded-xl
                   border
                   border-slate-800
-                  bg-slate-950/60
+                  bg-slate-950
                   p-4
                 "
               >
@@ -2269,7 +1930,6 @@ export function TrappedReportSection({
                       className="
                         text-xs
                         text-red-400
-                        hover:text-red-300
                       "
                     >
                       삭제
@@ -2287,10 +1947,8 @@ export function TrappedReportSection({
                   gap-2
                 ">
 
-                  <SelectField
-                    value={
-                      entry.hour
-                    }
+                  <Select
+                    value={entry.hour}
                     onChange={
                       value =>
                         updateEntry(
@@ -2301,12 +1959,13 @@ export function TrappedReportSection({
                     }
                     placeholder="시"
                     options={
-                      HOUR_OPTIONS.map(
+                      Array.from(
+                        { length: 24 },
+                        (_, i) => i
+                      ).map(
                         value => ({
                           value:
-                            String(
-                              value
-                            ),
+                            String(value),
                           label:
                             `${pad2(value)}시`
                         })
@@ -2314,11 +1973,8 @@ export function TrappedReportSection({
                     }
                   />
 
-
-                  <SelectField
-                    value={
-                      entry.minute
-                    }
+                  <Select
+                    value={entry.minute}
                     onChange={
                       value =>
                         updateEntry(
@@ -2329,12 +1985,13 @@ export function TrappedReportSection({
                     }
                     placeholder="분"
                     options={
-                      MINUTE_OPTIONS.map(
+                      Array.from(
+                        { length: 60 },
+                        (_, i) => i
+                      ).map(
                         value => ({
                           value:
-                            String(
-                              value
-                            ),
+                            String(value),
                           label:
                             `${pad2(value)}분`
                         })
@@ -2342,11 +1999,8 @@ export function TrappedReportSection({
                     }
                   />
 
-
                   <textarea
-                    value={
-                      entry.content
-                    }
+                    value={entry.content}
                     onChange={
                       e =>
                         updateEntry(
@@ -2356,9 +2010,10 @@ export function TrappedReportSection({
                         )
                     }
                     rows={3}
+                    placeholder="내용을 입력하세요."
                     className="
-                      sm:col-span-1
                       col-span-2
+                      sm:col-span-1
                       w-full
                       rounded-lg
                       border
@@ -2371,7 +2026,6 @@ export function TrappedReportSection({
                       focus:border-blue-500
                       resize-y
                     "
-                    placeholder="해당 시간의 내용을 입력하세요."
                   />
 
                 </div>
@@ -2399,16 +2053,37 @@ export function TrappedReportSection({
         sm:p-6
       ">
 
-        <h2 className="text-lg font-bold mb-5">
+        <h2 className="
+          text-lg
+          font-bold
+          mb-4
+        ">
           ④ 원인
         </h2>
 
-        <FieldTextarea
-          label="원인"
+        <textarea
           value={cause}
-          onChange={setCause}
+          onChange={
+            e =>
+              setCause(
+                e.target.value
+              )
+          }
           rows={6}
           placeholder="원인을 입력하세요."
+          className="
+            w-full
+            rounded-lg
+            border
+            border-slate-700
+            bg-slate-950
+            px-3
+            py-3
+            text-sm
+            outline-none
+            focus:border-blue-500
+            resize-y
+          "
         />
 
       </section>
@@ -2427,43 +2102,37 @@ export function TrappedReportSection({
         sm:p-6
       ">
 
-        <h2 className="text-lg font-bold mb-5">
+        <h2 className="
+          text-lg
+          font-bold
+          mb-4
+        ">
           ⑤ 조치
         </h2>
 
-        <FieldTextarea
-          label="조치"
+        <textarea
           value={action}
-          onChange={setAction}
+          onChange={
+            e =>
+              setAction(
+                e.target.value
+              )
+          }
           rows={6}
           placeholder="조치내용을 입력하세요."
-        />
-
-      </section>
-
-
-      {/* =================================================
-          작성자
-      ================================================= */}
-
-      <section className="
-        rounded-2xl
-        border
-        border-slate-800
-        bg-slate-900
-        p-5
-        sm:p-6
-      ">
-
-        <h2 className="text-lg font-bold mb-5">
-          작성자
-        </h2>
-
-        <Field
-          label="작성자"
-          value={writer}
-          onChange={setWriter}
-          placeholder="작성자 이름"
+          className="
+            w-full
+            rounded-lg
+            border
+            border-slate-700
+            bg-slate-950
+            px-3
+            py-3
+            text-sm
+            outline-none
+            focus:border-blue-500
+            resize-y
+          "
         />
 
       </section>
@@ -2479,7 +2148,6 @@ export function TrappedReportSection({
         border-slate-800
         bg-slate-900
         p-5
-        sm:p-6
       ">
 
         <div className="
@@ -2496,18 +2164,15 @@ export function TrappedReportSection({
               rounded-lg
               bg-slate-700
               hover:bg-slate-600
-              disabled:opacity-50
               px-5
               py-3
               font-semibold
-              text-sm
             "
           >
             {generating
-              ? '처리 중...'
+              ? '생성 중...'
               : 'PDF 미리보기'}
           </button>
-
 
           <button
             type="button"
@@ -2517,33 +2182,12 @@ export function TrappedReportSection({
               rounded-lg
               bg-blue-600
               hover:bg-blue-500
-              disabled:opacity-50
               px-5
               py-3
               font-semibold
-              text-sm
             "
           >
-            {generating
-              ? 'PDF 생성 중...'
-              : 'PDF 보고서 다운로드'}
-          </button>
-
-
-          <button
-            type="button"
-            onClick={resetForm}
-            className="
-              rounded-lg
-              bg-slate-800
-              hover:bg-slate-700
-              px-5
-              py-3
-              font-semibold
-              text-sm
-            "
-          >
-            입력 초기화
+            PDF 보고서 다운로드
           </button>
 
         </div>
@@ -2551,9 +2195,7 @@ export function TrappedReportSection({
       </section>
 
 
-      {/* =================================================
-          PDF 미리보기
-      ================================================= */}
+      {/* PDF 미리보기 */}
 
       {previewUrl && (
 
@@ -2570,7 +2212,7 @@ export function TrappedReportSection({
             title="PDF 미리보기"
             className="
               w-full
-              h-[800px]
+              h-[850px]
               rounded-xl
               bg-white
             "
@@ -2589,28 +2231,21 @@ export function TrappedReportSection({
  * 일반 입력
  * ========================================================= */
 
-interface FieldProps {
-  label: string;
-  value: string;
-  onChange: (
-    value: string
-  ) => void;
-  placeholder?: string;
-  type?: string;
-  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
-  maxLength?: number;
-}
-
-
 function Field({
   label,
   value,
   onChange,
   placeholder,
-  type = 'text',
   inputMode,
   maxLength
-}: FieldProps) {
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
+  maxLength?: number;
+}) {
 
   return (
 
@@ -2626,7 +2261,6 @@ function Field({
       </label>
 
       <input
-        type={type}
         value={value}
         onChange={
           e =>
@@ -2634,15 +2268,9 @@ function Field({
               e.target.value
             )
         }
-        placeholder={
-          placeholder
-        }
-        inputMode={
-          inputMode
-        }
-        maxLength={
-          maxLength
-        }
+        placeholder={placeholder}
+        inputMode={inputMode}
+        maxLength={maxLength}
         className="
           w-full
           rounded-lg
@@ -2663,38 +2291,28 @@ function Field({
 
 
 /* =========================================================
- * 자동완성 입력
- *
- * datalist를 사용하지 않음
- * → PC / 모바일 동일한 화면
+ * 자동완성
  * ========================================================= */
 
-interface AutocompleteFieldProps {
-  label: string;
-  value: string;
-  placeholder: string;
-  options: string[];
-  showOptions: boolean;
-  onFocus: () => void;
-  onChange: (
-    value: string
-  ) => void;
-  onSelect: (
-    value: string
-  ) => void;
-}
-
-
-function AutocompleteField({
+function Autocomplete({
   label,
   value,
   placeholder,
   options,
-  showOptions,
+  active,
   onFocus,
   onChange,
   onSelect
-}: AutocompleteFieldProps) {
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  options: string[];
+  active: boolean;
+  onFocus: () => void;
+  onChange: (value: string) => void;
+  onSelect: (value: string) => void;
+}) {
 
   return (
 
@@ -2709,7 +2327,6 @@ function AutocompleteField({
         {label}
       </label>
 
-
       <input
         value={value}
         onFocus={onFocus}
@@ -2719,9 +2336,7 @@ function AutocompleteField({
               e.target.value
             )
         }
-        placeholder={
-          placeholder
-        }
+        placeholder={placeholder}
         autoComplete="off"
         className="
           w-full
@@ -2738,17 +2353,18 @@ function AutocompleteField({
       />
 
 
-      {showOptions &&
+      {active &&
         options.length > 0 && (
 
           <div className="
             absolute
+            z-50
             left-0
             right-0
             top-full
             mt-1
-            z-50
-            overflow-hidden
+            max-h-64
+            overflow-y-auto
             rounded-lg
             border
             border-slate-700
@@ -2757,15 +2373,12 @@ function AutocompleteField({
           ">
 
             {options.map(
-              (
-                option,
-                index
-              ) => (
+              (option, index) => (
 
                 <button
                   key={`${option}-${index}`}
                   type="button"
-                  onPointerDown={
+                  onMouseDown={
                     e =>
                       e.preventDefault()
                   }
@@ -2777,15 +2390,13 @@ function AutocompleteField({
                   className="
                     block
                     w-full
-                    border-b
-                    border-slate-800
                     px-3
                     py-3
                     text-left
                     text-sm
-                    text-slate-200
+                    border-b
+                    border-slate-800
                     hover:bg-slate-800
-                    active:bg-slate-700
                   "
                 >
                   {option}
@@ -2807,24 +2418,19 @@ function AutocompleteField({
  * Select
  * ========================================================= */
 
-interface SelectOption {
-  value: string;
-  label: string;
-}
-
-
-function SelectField({
+function Select({
   value,
   onChange,
   placeholder,
   options
 }: {
   value: string;
-  onChange: (
-    value: string
-  ) => void;
+  onChange: (value: string) => void;
   placeholder: string;
-  options: SelectOption[];
+  options: {
+    value: string;
+    label: string;
+  }[];
 }) {
 
   return (
@@ -2870,88 +2476,4 @@ function SelectField({
 
     </select>
   );
-}
-
-
-/* =========================================================
- * Textarea
- * ========================================================= */
-
-function FieldTextarea({
-  label,
-  value,
-  onChange,
-  rows,
-  placeholder
-}: {
-  label: string;
-  value: string;
-  onChange: (
-    value: string
-  ) => void;
-  rows: number;
-  placeholder: string;
-}) {
-
-  return (
-
-    <div>
-
-      <label className="
-        block
-        text-sm
-        font-semibold
-        mb-2
-      ">
-        {label}
-      </label>
-
-      <textarea
-        value={value}
-        onChange={
-          e =>
-            onChange(
-              e.target.value
-            )
-        }
-        rows={rows}
-        className="
-          w-full
-          rounded-lg
-          border
-          border-slate-700
-          bg-slate-950
-          px-3
-          py-3
-          text-sm
-          outline-none
-          focus:border-blue-500
-          resize-y
-        "
-        placeholder={
-          placeholder
-        }
-      />
-
-    </div>
-  );
-}
-
-
-/* =========================================================
- * 파일명
- * ========================================================= */
-
-function safeFileName(
-  value: string
-) {
-
-  return String(
-    value || ''
-  )
-    .replace(
-      /[\\/:*?"<>|]/g,
-      '_'
-    )
-    .trim();
 }
