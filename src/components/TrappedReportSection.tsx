@@ -62,86 +62,86 @@ const PDF_POS = {
 
   siteName: {
     x: 126,
-    y: 566,
+    y: 563,
     size: 12,
   },
 
   address: {
     x: 335,
-    y: 566,
+    y: 563,
     size: 12,
   },
 
   // ★ 승강기 번호 왼쪽 정렬
   elevatorNo: {
     x: 126,
-    y: 519,
+    y: 516,
     size: 12,
   },
 
   occurredYear: {
     x: 335,
-    y: 519,
+    y: 516,
     size: 12,
   },
 
   occurredMonth: {
-    x: 375,
-    y: 519,
+    x: 377,
+    y: 516,
     size: 12,
   },
 
   occurredDay: {
     x: 400,
-    y: 519,
+    y: 516,
     size: 12,
   },
 
   occurredHour: {
     x: 450,
-    y: 519,
+    y: 516,
     size: 12,
   },
 
   occurredMinute: {
     x: 485,
-    y: 519,
+    y: 516,
     size: 12,
   },
 
   reportTime: {
     x: 129,
-    y: 470,
+    y: 465,
     size: 12,
   },
 
   reportContent: {
     x: 163,
-    y: 470,
+    y: 465,
     size: 12,
   },
 
   causeLabel: {
     x: 126,
-    y: 280,
+    y: 270,
     size: 12,
   },
 
   cause: {
     x: 126,
-    y: 262,
+    y: 252,
     size: 12,
   },
 
   actionLabel: {
     x: 126,
-    y: 210,
+    y: 200,
     size: 12,
   },
 
   action: {
     x: 126,
-    y: 190,
+    y: 180,
     size: 12,
   },
 } as const;
