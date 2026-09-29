@@ -86,7 +86,7 @@ const PDF_POS = {
   },
 
   occurredMonth: {
-    x: 373,
+    x: 375,
     y: 519,
     size: 12,
   },
@@ -123,25 +123,25 @@ const PDF_POS = {
 
   causeLabel: {
     x: 126,
-    y: 290,
+    y: 280,
     size: 12,
   },
 
   cause: {
     x: 126,
-    y: 272,
+    y: 262,
     size: 12,
   },
 
   actionLabel: {
     x: 126,
-    y: 220,
+    y: 210,
     size: 12,
   },
 
   action: {
     x: 126,
-    y: 200,
+    y: 190,
     size: 12,
   },
 } as const;
