@@ -50,13 +50,13 @@ interface ReportEntry {
 const PDF_POS = {
   reporterName: {
     x: 123,
-    y: 680,
+    y: 600,
     size: 12,
   },
 
   reporterPhone: {
     x: 335,
-    y: 680,
+    y: 600,
     size: 12,
   },
 
