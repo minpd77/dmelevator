@@ -290,12 +290,39 @@ function drawText(
 ) {
   if (!text) return;
 
-  page.drawText(text, {
-    x,
-    y,
-    size,
-    font,
-    color: rgb(0, 0, 0),
+  /*
+   * PDF에서 한글 폰트의 일반 공백이 화면에서 너무 넓게 보이는
+   * 문제를 줄이기 위해 공백만 직접 좁혀서 그립니다.
+   *
+   * 일반 글자 간격은 그대로 유지하고,
+   * 단어 사이 공백만 약 2.5pt로 고정합니다.
+   */
+  const normalized = String(text)
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!normalized) return;
+
+  const parts = normalized.split(' ');
+  let currentX = x;
+  const spaceGap = 2.5;
+
+  parts.forEach((part, index) => {
+    if (!part) return;
+
+    page.drawText(part, {
+      x: currentX,
+      y,
+      size,
+      font,
+      color: rgb(0, 0, 0),
+    });
+
+    currentX += font.widthOfTextAtSize(part, size);
+
+    if (index < parts.length - 1) {
+      currentX += spaceGap;
+    }
   });
 }
 
