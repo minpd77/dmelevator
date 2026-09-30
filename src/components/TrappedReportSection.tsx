@@ -123,25 +123,25 @@ const PDF_POS = {
 
   causeLabel: {
     x: 126,
-    y: 270,
+    y: 265,
     size: 12,
   },
 
   cause: {
-    x: 126,
-    y: 252,
+    x: 140,
+    y: 247,
     size: 12,
   },
 
   actionLabel: {
     x: 126,
-    y: 200,
+    y: 195,
     size: 12,
   },
 
   action: {
-    x: 126,
-    y: 180,
+    x: 140,
+    y: 175,
     size: 12,
   },
 } as const;
