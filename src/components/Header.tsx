@@ -2,7 +2,7 @@ import React from 'react';
 import { Calendar, ArrowLeft, Database } from 'lucide-react';
 
 interface HeaderProps {
-  currentView?: 'home' | 'inspection-db' | 'calendar' | 'report-form';
+  currentView?: 'home' | 'inspection-db' | 'calendar' | 'report-form' | 'trapped-report';
   onNavigateHome?: () => void;
   onNavigateDb?: () => void;
   onNavigateCalendar?: () => void;
@@ -39,6 +39,11 @@ export const Header: React.FC<HeaderProps> = ({
               {currentView === 'calendar' && (
                 <span className="inline-block px-2.5 py-0.5 rounded-md text-xs font-semibold bg-purple-950 text-purple-300 border border-purple-800">
                   일정 캘린더
+                </span>
+              )}
+              {currentView === 'trapped-report' && (
+                <span className="inline-block px-2.5 py-0.5 rounded-md text-xs font-semibold bg-red-950 text-red-300 border border-red-800">
+                  갇힘보고서
                 </span>
               )}
               {currentView === 'report-form' && (

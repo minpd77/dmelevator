@@ -1,2602 +1,1682 @@
-import React, {
-useEffect,
-useMemo,
-useState
-} from 'react';
-
-import {
-PDFDocument,
-rgb
-} from 'pdf-lib';
-
+import React, { useEffect, useMemo, useState } from 'react';
+import { PDFDocument, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 
-/* =========================================================
-Google Sheets
-========================================================= */
-
 const SHEET_URL =
-'https://docs.google.com/spreadsheets/d/e/2PACX-1vQkPXudgO_znrjg8-ZyoSmMb5dhrISbANstWt3xNanbbTNCNRhDwAQgxhrECxwN8R2QSV8lTgln6_9P/pub?gid=1374895459&single=true&output=tsv';
+  'https://docs.google.com/spreadsheets/d/e/2PACX-1vQkPXudgO_znrjg8-ZyoSmMb5dhrISbANstWt3xNanbbTNCNRhDwAQgxhrECxwN8R2QSV8lTgln6_9P/pub?gid=1374895459&single=true&output=tsv';
 
-/* =========================================================
-PDF 원본
-========================================================= */
-
-const PDF_TEMPLATE =
-'/report-template.pdf';
-
-/*
-
-한글 폰트
-*/
-const FONT_URL =
-'https://cdn.jsdelivr.net/gh/fonts-archive/NotoSansKR/NotoSansKR-Regular.otf';
-
-/* =========================================================
-타입
-========================================================= */
-
-interface SheetRow {
-
-site: string;
-
-address: string;
-
-elevator: string;
-
-}
-
-/* =========================================================
-Props
-========================================================= */
-
-interface Props {
-
-onBack: () => void;
-
-}
-
-/* =========================================================
-서울 25개 구
-========================================================= */
-
-const SEOUL_DISTRICTS = [
-
-'강남구',
-'강동구',
-'강북구',
-'강서구',
-'관악구',
-'광진구',
-'구로구',
-'금천구',
-'노원구',
-'도봉구',
-'동대문구',
-'동작구',
-'마포구',
-'서대문구',
-'서초구',
-'성동구',
-'성북구',
-'송파구',
-'양천구',
-'영등포구',
-'용산구',
-'은평구',
-'종로구',
-'중구',
-'중랑구'
-
-];
-
-/* =========================================================
-주소
-========================================================= */
-
-function normalizeAddress(
-value: string
-): string {
-
-let address =
-String(value || '')
-.replace(/\s+/g, ' ')
-.trim();
-
-if (!address) {
-
-return '';
-
-}
-
-/*
-
-이미 서울특별시
-*/
-
-if (
-address.startsWith(
-'서울특별시'
-)
-) {
-
-return address;
-
-}
-
-/*
-
-서울시 / 서울
-*/
-
-if (
-address.startsWith('서울시 ') ||
-address === '서울시' ||
-address.startsWith('서울 ')
-) {
-
-address =
-  address
-    .replace(
-      /^서울시\s*/,
-      ''
-    )
-    .replace(
-      /^서울\s*/,
-      ''
-    )
-    .trim();
-
-
-return (
-  '서울특별시 ' +
-  address
-);
-
-}
-
-/*
-
-서울 25개 구
-*/
-
-for (
-const district
-of SEOUL_DISTRICTS
-) {
-
-if (
-  address === district ||
-  address.startsWith(
-    district + ' '
-  )
-) {
-
-  return (
-    '서울특별시 ' +
-    address
-  );
-
-}
-
-}
-
-/*
-
-그 외 지역
-*/
-
-return address;
-
-}
-
-/* =========================================================
-현장명
-========================================================= */
-
-function cleanSiteName(
-value: string
-): string {
-
-return String(
-value || ''
-)
-.replace(
-/\s*(\sLH\s)\s*/gi,
-''
-)
-.replace(
-/\s+/g,
-' '
-)
-.trim();
-
-}
-
-/* =========================================================
-승강기 번호
-========================================================= */
-
-function formatElevatorNo(
-value: string
-): string {
-
-const digits =
-String(
-value || ''
-)
-.replace(
-/\D/g,
-''
-);
-
-if (
-digits.length === 7
-) {
-
-return (
-  digits.slice(0, 4) +
-  '-' +
-  digits.slice(4)
-);
-
-}
-
-/*
-
-0000-000 형태
-*/
-
-const match =
-String(
-value || ''
-).match(
-/^(\d{4})-(\d{3})$/
-);
-
-if (match) {
-
-return (
-  match[1] +
-  '-' +
-  match[2]
-);
-
-}
-
-return String(
-value || ''
-).trim();
-
-}
-
-/* =========================================================
-승강기 비교
-========================================================= */
-
-function normalizeElevator(
-value: string
-): string {
-
-return String(
-value || ''
-)
-.replace(
-/\D/g,
-''
-)
-.padStart(
-7,
-'0'
-);
-
-}
-
-/* =========================================================
-문자열 비교
-========================================================= */
-
-function normalizeText(
-value: string
-): string {
-
-return String(
-value || ''
-)
-.toLowerCase()
-.replace(
-/\s+/g,
-''
-)
-.trim();
-
-}
-
-/* =========================================================
-TSV
-========================================================= */
-
-function parseTSV(
-text: string
-): string[][] {
-
-return text
-.replace(/\r/g, '')
-.split('\n')
-.filter(
-line =>
-line.trim() !== ''
-)
-.map(
-line =>
-line.split('\t')
-);
-
-}
-
-/* =========================================================
-PDF 함수
-========================================================= */
-
-function whiteRect(
-page: any,
-x: number,
-y: number,
-width: number,
-height: number
-) {
-
-page.drawRectangle({
-
-x,
-
-y,
-
-width,
-
-height,
-
-color:
-  rgb(
-    1,
-    1,
-    1
-  )
-
-});
-
-}
-
-/* =========================================================
-텍스트
-========================================================= */
-
-function drawText(
-page: any,
-text: string,
-x: number,
-y: number,
-size: number,
-font: any
-) {
-
-if (!text) {
-
-return;
-
-}
-
-page.drawText(
-text,
-{
-
-  x,
-
-  y,
-
-  size,
-
-  font,
-
-  color:
-    rgb(
-      0,
-      0,
-      0
-    )
-
-}
-
-);
-
-}
-
-/* =========================================================
-텍스트 줄바꿈
-========================================================= */
-
-function wrapText(
-text: string,
-font: any,
-size: number,
-maxWidth: number
-): string[] {
-
-const result: string[] = [];
-
-const paragraphs =
-text.split('\n');
-
-for (
-const paragraph
-of paragraphs
-) {
-
-if (!paragraph) {
-
-  result.push('');
-
-  continue;
-
-}
-
-
-let line = '';
-
-
-for (
-  const char
-  of paragraph
-) {
-
-  const test =
-    line + char;
-
-
-  const width =
-    font.widthOfTextAtSize(
-      test,
-      size
-    );
-
-
-  if (
-    width > maxWidth &&
-    line
-  ) {
-
-    result.push(
-      line
-    );
-
-
-    line = char;
-
-  } else {
-
-    line = test;
-
-  }
-
-}
-
-
-if (line) {
-
-  result.push(
-    line
-  );
-
-}
-
-}
-
-return result;
-
-}
-
-/* =========================================================
-신고내용
-========================================================= */
-
-function drawReportContent(
-page: any,
-time: string,
-content: string,
-font: any
-) {
-
-/*
-
-시간 위치
-*/
-const timeX = 128;
-
-/*
-
-내용 시작 위치
-
-
-
-★ 이 값을 조정하면
-
-PDF의 내용 열 위치를 조정할 수 있습니다.
-*/
-const contentX = 190;
-
-/*
-
-첫 번째 줄
-*/
-const startY = 430;
-
-const fontSize = 10;
-
-const lineHeight = 18;
-
-const contentWidth = 345;
-
-/*
-
-시간
-*/
-
-if (time) {
-
-drawText(
-  page,
-  time,
-  timeX,
-  startY,
-  fontSize,
-  font
-);
-
-}
-
-/*
-
-내용
-*/
-
-if (!content) {
-
-return;
-
-}
-
-const lines =
-wrapText(
-content,
-font,
-fontSize,
-contentWidth
-);
-
-let y =
-startY;
-
-for (
-const line
-of lines
-) {
-
-if (
-  y < 70
-) {
-
-  break;
-
-}
-
-
-drawText(
-  page,
-  line,
-  contentX,
-  y,
-  fontSize,
-  font
-);
-
-
-y -=
-  lineHeight;
-
-}
-
-}
-
-/* =========================================================
-날짜
-========================================================= */
-
-function formatDateTime(
-value: string
-): string {
-
-if (!value) {
-
-return '';
-
-}
-
-const date =
-new Date(value);
-
-if (
-Number.isNaN(
-date.getTime()
-)
-) {
-
-return value;
-
-}
-
-const year =
-date.getFullYear();
-
-const month =
-date.getMonth() + 1;
-
-const day =
-date.getDate();
-
-const hour =
-String(
-date.getHours()
-).padStart(
-2,
-'0'
-);
-
-const minute =
-String(
-date.getMinutes()
-).padStart(
-2,
-'0'
-);
-
-return (
-${year}년 ${month}월 ${day}일  +
-${hour}:${minute} 경
-);
-
-}
-
-/* =========================================================
-파일명
-========================================================= */
-
-function safeFileName(
-value: string
-): string {
-
-return String(
-value || ''
-)
-.replace(
-/[\/:*?"<>|]/g,
-'_'
-)
-.trim();
-
-}
-
-/* =========================================================
-컴포넌트
-========================================================= */
-
-export function TrappedReportSection({
-onBack
-}: Props) {
-
-/*
-
-Sheet
-*/
-
-const [
-rows,
-setRows
-] =
-useState<SheetRow[]>([]);
-
-const [
-loadingSheet,
-setLoadingSheet
-] =
-useState(true);
-
-const [
-sheetError,
-setSheetError
-] =
-useState('');
-
-/*
-
-입력
-*/
-
-const [
-reporterName,
-setReporterName
-] =
-useState('');
-
-const [
-reporterPhone,
-setReporterPhone
-] =
-useState('');
-
-const [
-siteName,
-setSiteName
-] =
-useState('');
-
-const [
-address,
-setAddress
-] =
-useState('');
-
-const [
-elevatorNo,
-setElevatorNo
-] =
-useState('');
-
-const [
-occurredAt,
-setOccurredAt
-] =
-useState('');
-
-const [
-reportTime,
-setReportTime
-] =
-useState('');
-
-const [
-reportContent,
-setReportContent
-] =
-useState('');
-
-const [
-causeAction,
-setCauseAction
-] =
-useState('');
-
-const [
-writer,
-setWriter
-] =
-useState('');
-
-/*
-
-PDF 처리
-*/
-
-const [
-generating,
-setGenerating
-] =
-useState(false);
-
-const [
-previewUrl,
-setPreviewUrl
-] =
-useState('');
-
-/* =======================================================
-Sheet 불러오기
-======================================================= */
-
-useEffect(() => {
-
-let cancelled = false;
-
-
-async function loadSheet() {
-
-  setLoadingSheet(true);
-
-  setSheetError('');
-
-
-  try {
-
-    const response =
-      await fetch(
-        SHEET_URL +
-        '&t=' +
-        Date.now(),
-        {
-          cache:
-            'no-store'
-        }
-      );
-
-
-    if (!response.ok) {
-
-      throw new Error(
-        '스프레드시트 응답 오류'
-      );
-
-    }
-
-
-    const text =
-      await response.text();
-
-
-    const parsed =
-      parseTSV(text);
-
-
-    const converted =
-      parsed
-        .map(
-          row => ({
-
-            site:
-              cleanSiteName(
-                row[0] || ''
-              ),
-
-            address:
-              normalizeAddress(
-                row[2] || ''
-              ),
-
-            elevator:
-              formatElevatorNo(
-                row[3] || ''
-              )
-
-          })
-        )
-        .filter(
-          row =>
-            row.site ||
-            row.address ||
-            row.elevator
-        );
-
-
-    if (!cancelled) {
-
-      setRows(
-        converted
-      );
-
-    }
-
-
-  } catch (error: any) {
-
-    console.error(
-      error
-    );
-
-
-    if (!cancelled) {
-
-      setSheetError(
-        error?.message ||
-        '스프레드시트를 불러오지 못했습니다.'
-      );
-
-    }
-
-
-  } finally {
-
-    if (!cancelled) {
-
-      setLoadingSheet(
-        false
-      );
-
-    }
-
-  }
-
-}
-
-
-loadSheet();
-
-
-return () => {
-
-  cancelled = true;
-
-};
-
-}, []);
-
-/* =======================================================
-자동완성 목록
-======================================================= */
-
-const siteOptions =
-useMemo(
-() =>
-Array.from(
-new Set(
-rows
-.map(
-row =>
-row.site
-)
-.filter(Boolean)
-)
-),
-[rows]
-);
-
-const addressOptions =
-useMemo(
-() =>
-Array.from(
-new Set(
-rows
-.map(
-row =>
-row.address
-)
-.filter(Boolean)
-)
-),
-[rows]
-);
-
-const elevatorOptions =
-useMemo(
-() =>
-Array.from(
-new Set(
-rows
-.map(
-row =>
-row.elevator
-)
-.filter(Boolean)
-)
-),
-[rows]
-);
-
-/* =======================================================
-자동 조회
-======================================================= */
-
-function findRow(
-type:
-| 'site'
-| 'address'
-| 'elevator',
-value: string
-): SheetRow | null {
-
-if (!value.trim()) {
-
-  return null;
-
-}
-
-
-if (
-  type ===
-  'elevator'
-) {
-
-  const target =
-    normalizeElevator(
-      value
-    );
-
-
-  return (
-    rows.find(
-      row =>
-        normalizeElevator(
-          row.elevator
-        ) === target
-    ) ||
-    null
-  );
-
-}
-
-
-if (
-  type ===
-  'site'
-) {
-
-  const target =
-    normalizeText(
-      value
-    );
-
-
-  return (
-    rows.find(
-      row =>
-        normalizeText(
-          row.site
-        ) === target
-    ) ||
-    null
-  );
-
-}
-
-
-const target =
-  normalizeText(
-    normalizeAddress(
-      value
-    )
-  );
-
-
-return (
-  rows.find(
-    row =>
-      normalizeText(
-        row.address
-      ) === target
-  ) ||
-  null
-);
-
-}
-
-/* =======================================================
-자동 채우기
-======================================================= */
-
-function applyRow(
-row: SheetRow
-) {
-
-/*
- * 세 값 모두 자동 입력
- */
-
-setSiteName(
-  row.site
-);
-
-
-setAddress(
-  row.address
-);
-
-
-setElevatorNo(
-  row.elevator
-);
-
-}
-
-/* =======================================================
-PDF 생성
-======================================================= */
-
-async function createPDF(): Promise<Uint8Array> {
-
-/*
- * 원본 PDF
- */
-
-const response =
-  await fetch(
-    PDF_TEMPLATE +
-    '?v=' +
-    Date.now()
-  );
-
-
-if (!response.ok) {
-
-  throw new Error(
-    'public/report-template.pdf 파일을 찾을 수 없습니다.'
-  );
-
-}
-
-
-const templateBytes =
-  await response.arrayBuffer();
-
-
-const pdfDoc =
-  await PDFDocument.load(
-    templateBytes
-  );
-
+const PDF_TEMPLATE = `${import.meta.env.BASE_URL}report-template.pdf`;
 
 /*
  * 한글 폰트
- */
-
-pdfDoc.registerFontkit(
-  fontkit
-);
-
-
-const fontResponse =
-  await fetch(
-    FONT_URL
-  );
-
-
-if (!fontResponse.ok) {
-
-  throw new Error(
-    '한글 폰트를 불러오지 못했습니다.'
-  );
-
-}
-
-
-const fontBytes =
-  await fontResponse.arrayBuffer();
-
-
-const font =
-  await pdfDoc.embedFont(
-    fontBytes,
-    {
-      subset: true
-    }
-  );
-
-
-const page =
-  pdfDoc.getPages()[0];
-
-
-/*
- * =====================================================
- * 기존 PDF의 입력 영역을 흰색으로 덮음
- * =====================================================
  *
- * PDF 좌표 기준입니다.
- */
-
-
-/*
- * 신고자 성명
- */
-
-whiteRect(
-  page,
-  125,
-  600,
-  165,
-  25
-);
-
-
-/*
- * 신고자 연락처
- */
-
-whiteRect(
-  page,
-  280,
-  600,
-  280,
-  25
-);
-
-
-/*
- * 현장명
- */
-
-whiteRect(
-  page,
-  125,
-  555,
-  190,
-  28
-);
-
-
-/*
- * 주소
- */
-
-whiteRect(
-  page,
-  280,
-  555,
-  290,
-  28
-);
-
-
-/*
- * 승강기 번호
- */
-
-whiteRect(
-  page,
-  125,
-  510,
-  180,
-  28
-);
-
-
-/*
- * 발생일시
- */
-
-whiteRect(
-  page,
-  330,
-  505,
-  235,
-  35
-);
-
-
-/*
- * 신고내용
- */
-
-whiteRect(
-  page,
-  120,
-  285,
-  440,
-  170
-);
-
-
-/*
- * 원인 및 조치내용
- */
-
-whiteRect(
-  page,
-  120,
-  90,
-  440,
-  190
-);
-
-
-/*
- * 작성자
- */
-
-whiteRect(
-  page,
-  320,
-  700,
-  100,
-  45
-);
-
-
-/*
- * 보고 / 미보고 제거
- */
-
-whiteRect(
-  page,
-  45,
-  720,
-  130,
-  75
-);
-
-
-/*
- * =====================================================
- * 값 입력
- * =====================================================
- */
-
-drawText(
-  page,
-  reporterName,
-  128,
-  604,
-  11,
-  font
-);
-
-
-drawText(
-  page,
-  reporterPhone,
-  282,
-  604,
-  11,
-  font
-);
-
-
-drawText(
-  page,
-  siteName,
-  128,
-  560,
-  11,
-  font
-);
-
-
-drawText(
-  page,
-  address,
-  282,
-  560,
-  10,
-  font
-);
-
-
-drawText(
-  page,
-  formatElevatorNo(
-    elevatorNo
-  ),
-  128,
-  515,
-  11,
-  font
-);
-
-
-drawText(
-  page,
-  formatDateTime(
-    occurredAt
-  ),
-  300,
-  515,
-  10,
-  font
-);
-
-
-/*
- * =====================================================
- * 신고내용
+ * 가장 안정적인 방법:
+ * public/fonts/NotoSansKR-Regular.otf 를 넣고 아래 FONT_URL을
+ * `${import.meta.env.BASE_URL}fonts/NotoSansKR-Regular.otf`
+ * 로 사용하세요.
  *
- * 시간       내용
- *            내용
- *            내용
- *
- * 형태로 출력
- * =====================================================
+ * 우선 공식 Noto CJK 배포본의 한글 Regular 폰트를 사용합니다.
  */
+const FONT_URL =
+  `${import.meta.env.BASE_URL}fonts/NotoSansKR-Regular.otf`;
 
-drawReportContent(
-  page,
-  reportTime,
-  reportContent,
-  font
-);
-
-
-/*
- * =====================================================
- * 원인 및 조치내용
- * =====================================================
- */
-
-const causeLines =
-  wrapText(
-    causeAction,
-    font,
-    10,
-    400
-  );
-
-
-let causeY =
-  255;
-
-
-for (
-  const line
-  of causeLines
-) {
-
-  if (
-    causeY < 75
-  ) {
-
-    break;
-
-  }
-
-
-  drawText(
-    page,
-    line,
-    128,
-    causeY,
-    10,
-    font
-  );
-
-
-  causeY -=
-    18;
-
+interface Props {
+  onBack: () => void;
 }
 
-
-/*
- * 작성자
- */
-
-drawText(
-  page,
-  writer,
-  325,
-  710,
-  11,
-  font
-);
-
-
-return await pdfDoc.save();
-
+interface SheetRow {
+  site: string;
+  address: string;
+  elevator: string;
 }
 
-/* =======================================================
-다운로드
-======================================================= */
-
-async function handleDownload() {
-
-setGenerating(
-  true
-);
-
-
-try {
-
-  const bytes =
-    await createPDF();
-
-
-  const blob =
-    new Blob(
-      [bytes],
-      {
-        type:
-          'application/pdf'
-      }
-    );
-
-
-  const url =
-    URL.createObjectURL(
-      blob
-    );
-
-
-  const fileName =
-    (
-      safeFileName(
-        siteName
-      ) ||
-      '승객갇힘'
-    ) +
-    '_' +
-    (
-      safeFileName(
-        elevatorNo
-      ) ||
-      '보고서'
-    ) +
-    '_승객갇힘보고서.pdf';
-
-
-  const a =
-    document.createElement(
-      'a'
-    );
-
-
-  a.href =
-    url;
-
-
-  a.download =
-    fileName;
-
-
-  document.body.appendChild(
-    a
-  );
-
-
-  a.click();
-
-
-  a.remove();
-
-
-  setTimeout(
-    () =>
-      URL.revokeObjectURL(
-        url
-      ),
-    2000
-  );
-
-
-} catch (error: any) {
-
-  console.error(
-    error
-  );
-
-
-  alert(
-    error?.message ||
-    'PDF 생성 중 오류가 발생했습니다.'
-  );
-
-
-} finally {
-
-  setGenerating(
-    false
-  );
-
-}
-
-}
-
-/* =======================================================
-미리보기
-======================================================= */
-
-async function handlePreview() {
-
-setGenerating(
-  true
-);
-
-
-try {
-
-  const bytes =
-    await createPDF();
-
-
-  const blob =
-    new Blob(
-      [bytes],
-      {
-        type:
-          'application/pdf'
-      }
-    );
-
-
-  const url =
-    URL.createObjectURL(
-      blob
-    );
-
-
-  setPreviewUrl(
-    oldUrl => {
-
-      if (oldUrl) {
-
-        URL.revokeObjectURL(
-          oldUrl
-        );
-
-      }
-
-
-      return url;
-
-    }
-  );
-
-
-} catch (error: any) {
-
-  console.error(
-    error
-  );
-
-
-  alert(
-    error?.message ||
-    'PDF 미리보기 중 오류가 발생했습니다.'
-  );
-
-
-} finally {
-
-  setGenerating(
-    false
-  );
-
-}
-
-}
-
-/* =======================================================
-입력 변경
-======================================================= */
-
-function handleSiteChange(
-value: string
-) {
-
-setSiteName(
-  value
-);
-
-
-const found =
-  findRow(
-    'site',
-    value
-  );
-
-
-if (found) {
-
-  applyRow(
-    found
-  );
-
-}
-
-}
-
-function handleAddressChange(
-value: string
-) {
-
-setAddress(
-  value
-);
-
-
-const found =
-  findRow(
-    'address',
-    value
-  );
-
-
-if (found) {
-
-  applyRow(
-    found
-  );
-
-}
-
-}
-
-function handleElevatorChange(
-value: string
-) {
-
-const formatted =
-  formatElevatorNo(
-    value
-  );
-
-
-setElevatorNo(
-  formatted
-);
-
-
-const found =
-  findRow(
-    'elevator',
-    formatted
-  );
-
-
-if (found) {
-
-  applyRow(
-    found
-  );
-
-}
-
-}
-
-/* =======================================================
-초기화
-======================================================= */
-
-function resetForm() {
-
-setReporterName('');
-setReporterPhone('');
-setSiteName('');
-setAddress('');
-setElevatorNo('');
-setOccurredAt('');
-setReportTime('');
-setReportContent('');
-setCauseAction('');
-setWriter('');
-
-
-if (previewUrl) {
-
-  URL.revokeObjectURL(
-    previewUrl
-  );
-
-}
-
-
-setPreviewUrl('');
-
-}
-
-/* =======================================================
-Render
-======================================================= */
-
-return (
-
-<div
-  className="
-    w-full
-    space-y-6
-  "
->
-
-  {/* =================================================
-      제목
-  ================================================= */}
-
-  <div
-    className="
-      flex
-      flex-col
-      sm:flex-row
-      sm:items-center
-      sm:justify-between
-      gap-4
-    "
-  >
-
-    <div>
-
-      <h1
-        className="
-          text-2xl
-          sm:text-3xl
-          font-bold
-          text-white
-        "
-      >
-        승객갇힘 보고서 작성
-      </h1>
-
-      <p
-        className="
-          text-sm
-          text-slate-400
-          mt-2
-        "
-      >
-        승강기 번호 또는 현장 정보를 입력하면
-        스프레드시트에서 현장 정보를 자동으로 불러옵니다.
-      </p>
-
-    </div>
-
-
-    <button
-      type="button"
-      onClick={
-        onBack
-      }
-      className="
-        px-4
-        py-2
-        rounded-lg
-        bg-slate-800
-        hover:bg-slate-700
-        text-sm
-        font-semibold
-        transition
-      "
-    >
-      ← 홈으로
-    </button>
-
-  </div>
-
-
-  {/* =================================================
-      Sheet 상태
-  ================================================= */}
-
-  <div
-    className="
-      rounded-xl
-      border
-      border-slate-800
-      bg-slate-900
-      p-4
-    "
-  >
-
-    {loadingSheet ? (
-
-      <div
-        className="
-          text-sm
-          text-slate-400
-        "
-      >
-        스프레드시트 정보를 불러오는 중...
-      </div>
-
-    ) : sheetError ? (
-
-      <div
-        className="
-          text-sm
-          text-red-400
-        "
-      >
-        스프레드시트 오류 :
-        {' '}
-        {sheetError}
-      </div>
-
-    ) : (
-
-      <div
-        className="
-          text-sm
-          text-emerald-400
-        "
-      >
-        ✓ 현장정보 DB 연결 완료
-        {' '}
-        ({rows.length.toLocaleString()}건)
-      </div>
-
-    )}
-
-  </div>
-
-
-  {/* =================================================
-      신고자
-  ================================================= */}
-
-  <section
-    className="
-      rounded-2xl
-      border
-      border-slate-800
-      bg-slate-900
-      p-5
-      sm:p-6
-    "
-  >
-
-    <h2
-      className="
-        text-lg
-        font-bold
-        mb-5
-      "
-    >
-      ① 신고자
-    </h2>
-
-
-    <div
-      className="
-        grid
-        grid-cols-1
-        md:grid-cols-2
-        gap-4
-      "
-    >
-
-      <Field
-        label="성명"
-        value={
-          reporterName
-        }
-        onChange={
-          setReporterName
-        }
-        placeholder="신고자 성명"
-      />
-
-
-      <Field
-        label="연락처"
-        value={
-          reporterPhone
-        }
-        onChange={
-          setReporterPhone
-        }
-        placeholder="010-0000-0000"
-      />
-
-    </div>
-
-  </section>
-
-
-  {/* =================================================
-      현장 정보
-  ================================================= */}
-
-  <section
-    className="
-      rounded-2xl
-      border
-      border-slate-800
-      bg-slate-900
-      p-5
-      sm:p-6
-    "
-  >
-
-    <h2
-      className="
-        text-lg
-        font-bold
-        mb-5
-      "
-    >
-      ② 신고 현황
-    </h2>
-
-
-    <div
-      className="
-        grid
-        grid-cols-1
-        md:grid-cols-2
-        gap-4
-      "
-    >
-
-      <div>
-
-        <label
-          className="
-            block
-            text-sm
-            font-semibold
-            mb-2
-          "
-        >
-          현장명
-        </label>
-
-        <input
-          list="site-options"
-          value={
-            siteName
-          }
-          onChange={
-            e =>
-              handleSiteChange(
-                e.target.value
-              )
-          }
-          className="
-            w-full
-            rounded-lg
-            border
-            border-slate-700
-            bg-slate-950
-            px-3
-            py-3
-            text-sm
-            outline-none
-            focus:border-blue-500
-          "
-          placeholder="현장명을 입력하거나 선택"
-        />
-
-      </div>
-
-
-      <div>
-
-        <label
-          className="
-            block
-            text-sm
-            font-semibold
-            mb-2
-          "
-        >
-          소재지
-        </label>
-
-        <input
-          list="address-options"
-          value={
-            address
-          }
-          onChange={
-            e =>
-              handleAddressChange(
-                e.target.value
-              )
-          }
-          className="
-            w-full
-            rounded-lg
-            border
-            border-slate-700
-            bg-slate-950
-            px-3
-            py-3
-            text-sm
-            outline-none
-            focus:border-blue-500
-          "
-          placeholder="주소"
-        />
-
-      </div>
-
-
-      <div>
-
-        <label
-          className="
-            block
-            text-sm
-            font-semibold
-            mb-2
-          "
-        >
-          승강기 번호
-        </label>
-
-        <input
-          list="elevator-options"
-          value={
-            elevatorNo
-          }
-          onChange={
-            e =>
-              handleElevatorChange(
-                e.target.value
-              )
-          }
-          className="
-            w-full
-            rounded-lg
-            border
-            border-slate-700
-            bg-slate-950
-            px-3
-            py-3
-            text-sm
-            outline-none
-            focus:border-blue-500
-          "
-          placeholder="0000-000"
-        />
-
-      </div>
-
-
-      <Field
-        label="발생 일시"
-        type="datetime-local"
-        value={
-          occurredAt
-        }
-        onChange={
-          setOccurredAt
-        }
-      />
-
-    </div>
-
-
-    <datalist
-      id="site-options"
-    >
-
-      {siteOptions.map(
-        site => (
-
-          <option
-            key={site}
-            value={site}
-          />
-
-        )
-      )}
-
-    </datalist>
-
-
-    <datalist
-      id="address-options"
-    >
-
-      {addressOptions.map(
-        addressValue => (
-
-          <option
-            key={addressValue}
-            value={addressValue}
-          />
-
-        )
-      )}
-
-    </datalist>
-
-
-    <datalist
-      id="elevator-options"
-    >
-
-      {elevatorOptions.map(
-        elevator => (
-
-          <option
-            key={elevator}
-            value={elevator}
-          />
-
-        )
-      )}
-
-    </datalist>
-
-  </section>
-
-
-  {/* =================================================
-      신고내용
-  ================================================= */}
-
-  <section
-    className="
-      rounded-2xl
-      border
-      border-slate-800
-      bg-slate-900
-      p-5
-      sm:p-6
-    "
-  >
-
-    <h2
-      className="
-        text-lg
-        font-bold
-        mb-5
-      "
-    >
-      ③ 신고내용
-    </h2>
-
-
-    <div
-      className="
-        grid
-        grid-cols-1
-        md:grid-cols-[150px_1fr]
-        gap-4
-      "
-    >
-
-      <Field
-        label="시간"
-        type="time"
-        value={
-          reportTime
-        }
-        onChange={
-          setReportTime
-        }
-      />
-
-
-      <div>
-
-        <label
-          className="
-            block
-            text-sm
-            font-semibold
-            mb-2
-          "
-        >
-          내용
-        </label>
-
-        <textarea
-          value={
-            reportContent
-          }
-          onChange={
-            e =>
-              setReportContent(
-                e.target.value
-              )
-          }
-          rows={7}
-          className="
-            w-full
-            rounded-lg
-            border
-            border-slate-700
-            bg-slate-950
-            px-3
-            py-3
-            text-sm
-            outline-none
-            focus:border-blue-500
-            resize-y
-          "
-          placeholder={
-            '신고내용을 입력하세요.'
-          }
-        />
-
-      </div>
-
-    </div>
-
-  </section>
-
-
-  {/* =================================================
-      원인 및 조치
-  ================================================= */}
-
-  <section
-    className="
-      rounded-2xl
-      border
-      border-slate-800
-      bg-slate-900
-      p-5
-      sm:p-6
-    "
-  >
-
-    <h2
-      className="
-        text-lg
-        font-bold
-        mb-5
-      "
-    >
-      ④ 원인 및 조치내용
-    </h2>
-
-
-    <textarea
-      value={
-        causeAction
-      }
-      onChange={
-        e =>
-          setCauseAction(
-            e.target.value
-          )
-      }
-      rows={8}
-      className="
-        w-full
-        rounded-lg
-        border
-        border-slate-700
-        bg-slate-950
-        px-3
-        py-3
-        text-sm
-        outline-none
-        focus:border-blue-500
-        resize-y
-      "
-      placeholder="원인 및 조치내용을 입력하세요."
-    />
-
-  </section>
-
-
-  {/* =================================================
-      작성자
-  ================================================= */}
-
-  <section
-    className="
-      rounded-2xl
-      border
-      border-slate-800
-      bg-slate-900
-      p-5
-      sm:p-6
-    "
-  >
-
-    <h2
-      className="
-        text-lg
-        font-bold
-        mb-5
-      "
-    >
-      ⑤ 작성자
-    </h2>
-
-
-    <Field
-      label="작성자"
-      value={
-        writer
-      }
-      onChange={
-        setWriter
-      }
-      placeholder="작성자 이름"
-    />
-
-  </section>
-
-
-  {/* =================================================
-      버튼
-  ================================================= */}
-
-  <section
-    className="
-      rounded-2xl
-      border
-      border-slate-800
-      bg-slate-900
-      p-5
-      sm:p-6
-    "
-  >
-
-    <div
-      className="
-        flex
-        flex-wrap
-        gap-3
-      "
-    >
-
-      <button
-        type="button"
-        disabled={
-          generating
-        }
-        onClick={
-          handlePreview
-        }
-        className="
-          rounded-lg
-          bg-slate-700
-          hover:bg-slate-600
-          disabled:opacity-50
-          px-5
-          py-3
-          font-semibold
-          text-sm
-        "
-      >
-        {generating
-          ? '처리 중...'
-          : 'PDF 미리보기'}
-      </button>
-
-
-      <button
-        type="button"
-        disabled={
-          generating
-        }
-        onClick={
-          handleDownload
-        }
-        className="
-          rounded-lg
-          bg-blue-600
-          hover:bg-blue-500
-          disabled:opacity-50
-          px-5
-          py-3
-          font-semibold
-          text-sm
-        "
-      >
-        {generating
-          ? 'PDF 생성 중...'
-          : 'PDF 보고서 다운로드'}
-      </button>
-
-
-      <button
-        type="button"
-        onClick={
-          resetForm
-        }
-        className="
-          rounded-lg
-          bg-slate-800
-          hover:bg-slate-700
-          px-5
-          py-3
-          font-semibold
-          text-sm
-        "
-      >
-        입력 초기화
-      </button>
-
-    </div>
-
-  </section>
-
-
-  {/* =================================================
-      Preview
-  ================================================= */}
-
-  {previewUrl && (
-
-    <section
-      className="
-        rounded-2xl
-        border
-        border-slate-800
-        bg-slate-900
-        p-3
-      "
-    >
-
-      <iframe
-        src={
-          previewUrl
-        }
-        title="PDF 미리보기"
-        className="
-          w-full
-          h-[800px]
-          rounded-xl
-          bg-white
-        "
-      />
-
-    </section>
-
-  )}
-
-</div>
-
-);
-
+interface ReportEntry {
+  id: number;
+  hour: string;
+  minute: string;
+  content: string;
 }
 
 /* =========================================================
-공통 Field
-========================================================= */
+ * PDF 좌표
+ * =========================================================
+ *
+ * PDF 기준 좌표입니다.
+ * 글씨 크기는 요청대로 기존 10pt → 12pt로 변경했습니다.
+ *
+ * 승강기번호는 셀의 왼쪽 시작점에 맞췄습니다.
+ * ========================================================= */
 
-interface FieldProps {
+const PDF_POS = {
+  reporterName: {
+    x: 126,
+    y: 610,
+    size: 12,
+  },
 
-label: string;
+  reporterPhone: {
+    x: 335,
+    y: 610,
+    size: 12,
+  },
 
-value: string;
+  siteName: {
+    x: 126,
+    y: 563,
+    size: 12,
+  },
 
-onChange:
-(value: string) => void;
+  address: {
+    x: 335,
+    y: 563,
+    size: 12,
+  },
 
-placeholder?: string;
+  // ★ 승강기 번호 왼쪽 정렬
+  elevatorNo: {
+    x: 126,
+    y: 516,
+    size: 12,
+  },
 
-type?: string;
+  occurredYear: {
+    x: 335,
+    y: 516,
+    size: 12,
+  },
 
+  occurredMonth: {
+    x: 377,
+    y: 516,
+    size: 12,
+  },
+
+  occurredDay: {
+    x: 400,
+    y: 516,
+    size: 12,
+  },
+
+  occurredHour: {
+    x: 450,
+    y: 516,
+    size: 12,
+  },
+
+  occurredMinute: {
+    x: 485,
+    y: 516,
+    size: 12,
+  },
+
+  reportTime: {
+    x: 129,
+    y: 465,
+    size: 12,
+  },
+
+  reportContent: {
+    x: 163,
+    y: 465,
+    size: 12,
+  },
+
+  causeLabel: {
+    x: 126,
+    y: 265,
+    size: 12,
+  },
+
+  cause: {
+    x: 140,
+    y: 247,
+    size: 12,
+  },
+
+  actionLabel: {
+    x: 126,
+    y: 195,
+    size: 12,
+  },
+
+  action: {
+    x: 140,
+    y: 175,
+    size: 12,
+  },
+} as const;
+
+/* =========================================================
+ * 공통 함수
+ * ========================================================= */
+
+function pad2(value: string | number) {
+  return String(value).padStart(2, '0');
 }
 
-function Field({
-label,
-value,
-onChange,
-placeholder,
-type = 'text'
-}: FieldProps) {
+function cleanSiteName(value: string) {
+  return String(value || '')
+    .replace(/\s*\(\s*LH\s*\)/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-return (
+function normalizeAddress(value: string) {
+  let address = String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim();
 
-<div>
+  if (!address) return '';
 
-  <label
-    className="
-      block
-      text-sm
-      font-semibold
-      mb-2
-    "
-  >
-    {label}
-  </label>
+  if (address.startsWith('서울특별시')) {
+    return address;
+  }
 
+  if (address.startsWith('서울시 ') || address.startsWith('서울 ')) {
+    return `서울특별시 ${address
+      .replace(/^서울시\s*/, '')
+      .replace(/^서울\s*/, '')
+      .trim()}`;
+  }
 
-  <input
-    type={
-      type
+  const districts = [
+    '강남구', '강동구', '강북구', '강서구', '관악구',
+    '광진구', '구로구', '금천구', '노원구', '도봉구',
+    '동대문구', '동작구', '마포구', '서대문구', '서초구',
+    '성동구', '성북구', '송파구', '양천구', '영등포구',
+    '용산구', '은평구', '종로구', '중구', '중랑구',
+  ];
+
+  if (
+    districts.some(
+      district =>
+        address === district || address.startsWith(`${district} `)
+    )
+  ) {
+    return `서울특별시 ${address}`;
+  }
+
+  return address;
+}
+
+function formatElevatorNo(value: string) {
+  const digits = String(value || '').replace(/\D/g, '');
+
+  if (digits.length === 7) {
+    return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  }
+
+  return value;
+}
+
+function normalizeElevator(value: string) {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits ? digits.padStart(7, '0') : '';
+}
+
+function normalizeText(value: string) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .trim();
+}
+
+function formatPhone(value: string) {
+  const digits = String(value || '')
+    .replace(/\D/g, '')
+    .slice(0, 11);
+
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 7) {
+    return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  }
+
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+}
+
+function parseTSV(text: string): string[][] {
+  return text
+    .replace(/\r/g, '')
+    .split('\n')
+    .filter(line => line.trim())
+    .map(line => line.split('\t'));
+}
+
+function daysInMonth(year: number, month: number) {
+  return new Date(year, month, 0).getDate();
+}
+
+function wrapText(
+  text: string,
+  font: any,
+  size: number,
+  maxWidth: number
+) {
+  const result: string[] = [];
+
+  for (const paragraph of String(text || '').split('\n')) {
+    if (!paragraph) {
+      result.push('');
+      continue;
     }
-    value={
-      value
+
+    let line = '';
+
+    for (const char of paragraph) {
+      const test = line + char;
+      const width = font.widthOfTextAtSize(test, size);
+
+      if (width > maxWidth && line) {
+        result.push(line);
+        line = char;
+      } else {
+        line = test;
+      }
     }
-    onChange={
-      e =>
-        onChange(
-          e.target.value
+
+    if (line) result.push(line);
+  }
+
+  return result;
+}
+
+function drawText(
+  page: any,
+  text: string,
+  x: number,
+  y: number,
+  size: number,
+  font: any
+) {
+  if (!text) return;
+
+  /*
+   * PDF에서 한글 폰트의 일반 공백이 화면에서 너무 넓게 보이는
+   * 문제를 줄이기 위해 공백만 직접 좁혀서 그립니다.
+   *
+   * 일반 글자 간격은 그대로 유지하고,
+   * 단어 사이 공백만 약 2.5pt로 고정합니다.
+   */
+  const normalized = String(text)
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!normalized) return;
+
+  const parts = normalized.split(' ');
+  let currentX = x;
+  const spaceGap = 2.5;
+
+  parts.forEach((part, index) => {
+    if (!part) return;
+
+    page.drawText(part, {
+      x: currentX,
+      y,
+      size,
+      font,
+      color: rgb(0, 0, 0),
+    });
+
+    currentX += font.widthOfTextAtSize(part, size);
+
+    if (index < parts.length - 1) {
+      currentX += spaceGap;
+    }
+  });
+}
+
+/* =========================================================
+ * 신고내용
+ * ========================================================= */
+
+function drawReportEntries(
+  page: any,
+  entries: ReportEntry[],
+  font: any
+) {
+  let y = PDF_POS.reportTime.y;
+
+  const timeX = PDF_POS.reportTime.x;
+  const contentX = PDF_POS.reportContent.x;
+  const size = 12;
+
+  // 12pt에 맞춰 줄 간격도 증가
+  const lineHeight = 16;
+  const maxWidth = 350;
+
+  for (const entry of entries) {
+    if (y < 300) break;
+
+    const time =
+      entry.hour && entry.minute
+        ? `${pad2(entry.hour)}:${pad2(entry.minute)}`
+        : '';
+
+    drawText(page, time, timeX, y, size, font);
+
+    const lines = wrapText(
+      entry.content,
+      font,
+      size,
+      maxWidth
+    );
+
+    for (const line of lines) {
+      if (y < 300) break;
+
+      drawText(
+        page,
+        line,
+        contentX,
+        y,
+        size,
+        font
+      );
+
+      y -= lineHeight;
+    }
+
+    y -= 5;
+  }
+}
+
+/* =========================================================
+ * 원인 / 조치
+ * ========================================================= */
+
+function drawCauseAndAction(
+  page: any,
+  cause: string,
+  action: string,
+  font: any
+) {
+  const size = 12;
+
+  drawText(
+    page,
+    '원인',
+    PDF_POS.causeLabel.x,
+    PDF_POS.causeLabel.y,
+    12,
+    font
+  );
+
+  let causeY = PDF_POS.cause.y;
+
+  const causeLines = wrapText(
+    cause,
+    font,
+    size,
+    350
+  );
+
+  for (const line of causeLines) {
+    if (causeY < 245) break;
+
+    drawText(
+      page,
+      line,
+      PDF_POS.cause.x,
+      causeY,
+      size,
+      font
+    );
+
+    causeY -= 16;
+  }
+
+  drawText(
+    page,
+    '조치',
+    PDF_POS.actionLabel.x,
+    PDF_POS.actionLabel.y,
+    12,
+    font
+  );
+
+  let actionY = PDF_POS.action.y;
+
+  const actionLines = wrapText(
+    action,
+    font,
+    size,
+    350
+  );
+
+  for (const line of actionLines) {
+    if (actionY < 110) break;
+
+    drawText(
+      page,
+      line,
+      PDF_POS.action.x,
+      actionY,
+      size,
+      font
+    );
+
+    actionY -= 16;
+  }
+}
+
+/* =========================================================
+ * 메인
+ * ========================================================= */
+
+export function TrappedReportSection({ onBack }: Props) {
+  const [rows, setRows] = useState<SheetRow[]>([]);
+  const [loadingSheet, setLoadingSheet] = useState(true);
+  const [sheetError, setSheetError] = useState('');
+
+  // ① 신고자
+  const [reporterName, setReporterName] = useState('');
+  const [reporterPhone, setReporterPhone] = useState('');
+
+  // ② 신고 현황
+  const [siteName, setSiteName] = useState('');
+  const [address, setAddress] = useState('');
+  const [elevatorNo, setElevatorNo] = useState('');
+
+  const [activeField, setActiveField] = useState<
+    'site' | 'address' | 'elevator' | null
+  >(null);
+
+  // 발생일시
+  const now = new Date();
+
+  const [occurredYear, setOccurredYear] = useState(
+    String(now.getFullYear())
+  );
+  const [occurredMonth, setOccurredMonth] = useState(
+    String(now.getMonth() + 1)
+  );
+  const [occurredDay, setOccurredDay] = useState(
+    String(now.getDate())
+  );
+  const [occurredHour, setOccurredHour] = useState('');
+  const [occurredMinute, setOccurredMinute] = useState('');
+
+  // ③ 신고내용
+  const [reportEntries, setReportEntries] = useState<ReportEntry[]>([
+    {
+      id: 1,
+      hour: '',
+      minute: '',
+      content: '',
+    },
+  ]);
+
+  const [nextId, setNextId] = useState(2);
+
+  // ④ 원인
+  const [cause, setCause] = useState('');
+
+  // ⑤ 조치
+  const [action, setAction] = useState('');
+
+  // PDF
+  const [generating, setGenerating] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState('');
+
+  /* =====================================================
+   * DB
+   * ===================================================== */
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const response = await fetch(
+          `${SHEET_URL}&t=${Date.now()}`,
+          { cache: 'no-store' }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            '스프레드시트를 불러오지 못했습니다.'
+          );
+        }
+
+        const text = await response.text();
+        const parsed = parseTSV(text);
+
+        const data = parsed
+          .map(row => ({
+            site: cleanSiteName(row[0] || ''),
+            address: normalizeAddress(row[2] || ''),
+            elevator: formatElevatorNo(row[3] || ''),
+          }))
+          .filter(
+            row =>
+              row.site ||
+              row.address ||
+              row.elevator
+          );
+
+        if (!cancelled) setRows(data);
+      } catch (error: any) {
+        if (!cancelled) {
+          setSheetError(
+            error?.message || 'DB 연결 오류'
+          );
+        }
+      } finally {
+        if (!cancelled) setLoadingSheet(false);
+      }
+    }
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const siteOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          rows.map(row => row.site).filter(Boolean)
         )
+      ),
+    [rows]
+  );
+
+  const addressOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          rows.map(row => row.address).filter(Boolean)
+        )
+      ),
+    [rows]
+  );
+
+  const elevatorOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          rows.map(row => row.elevator).filter(Boolean)
+        )
+      ),
+    [rows]
+  );
+
+  function findRow(
+    type: 'site' | 'address' | 'elevator',
+    value: string
+  ) {
+    if (!value.trim()) return null;
+
+    if (type === 'elevator') {
+      const target = normalizeElevator(value);
+
+      return (
+        rows.find(
+          row =>
+            normalizeElevator(row.elevator) === target
+        ) || null
+      );
     }
-    placeholder={
-      placeholder
+
+    if (type === 'site') {
+      const target = normalizeText(value);
+
+      return (
+        rows.find(
+          row =>
+            normalizeText(row.site) === target
+        ) || null
+      );
     }
-    className="
-      w-full
-      rounded-lg
-      border
-      border-slate-700
-      bg-slate-950
-      px-3
-      py-3
-      text-sm
-      outline-none
-      focus:border-blue-500
-    "
-  />
 
-</div>
+    const target = normalizeText(
+      normalizeAddress(value)
+    );
 
-);
+    return (
+      rows.find(
+        row =>
+          normalizeText(row.address) === target
+      ) || null
+    );
+  }
 
+  function applyRow(row: SheetRow) {
+    setSiteName(row.site);
+    setAddress(row.address);
+    setElevatorNo(row.elevator);
+    setActiveField(null);
+  }
+
+  function filterOptions(
+    type: 'site' | 'address' | 'elevator',
+    value: string
+  ) {
+    let source: string[] = [];
+
+    if (type === 'site') source = siteOptions;
+    if (type === 'address') source = addressOptions;
+    if (type === 'elevator') source = elevatorOptions;
+
+    const query =
+      type === 'elevator'
+        ? value.replace(/\D/g, '')
+        : normalizeText(value);
+
+    if (!query) return source.slice(0, 8);
+
+    return source
+      .filter(option => {
+        const normalized =
+          type === 'elevator'
+            ? option.replace(/\D/g, '')
+            : normalizeText(option);
+
+        return normalized.includes(query);
+      })
+      .slice(0, 8);
+  }
+
+  /* =====================================================
+   * 신고내용
+   * ===================================================== */
+
+  function updateEntry(
+    id: number,
+    field: 'hour' | 'minute' | 'content',
+    value: string
+  ) {
+    setReportEntries(current =>
+      current.map(entry =>
+        entry.id === id
+          ? { ...entry, [field]: value }
+          : entry
+      )
+    );
+  }
+
+  function addEntry() {
+    setReportEntries(current => [
+      ...current,
+      {
+        id: nextId,
+        hour: '',
+        minute: '',
+        content: '',
+      },
+    ]);
+
+    setNextId(value => value + 1);
+  }
+
+  function removeEntry(id: number) {
+    setReportEntries(current => {
+      if (current.length <= 1) return current;
+
+      return current.filter(
+        entry => entry.id !== id
+      );
+    });
+  }
+
+  /* =====================================================
+   * PDF 생성
+   * ===================================================== */
+
+  async function createPDF() {
+    const response = await fetch(
+      `${PDF_TEMPLATE}?v=${Date.now()}`
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        'public/report-template.pdf 파일을 찾을 수 없습니다.'
+      );
+    }
+
+    const bytes = await response.arrayBuffer();
+
+    const pdfDoc = await PDFDocument.load(bytes);
+
+    pdfDoc.registerFontkit(fontkit);
+
+    const fontResponse = await fetch(
+      `${FONT_URL}?v=1`
+    );
+
+    if (!fontResponse.ok) {
+      throw new Error(
+        '한글 폰트를 불러오지 못했습니다. public/fonts/NotoSansKR-Regular.otf 파일이 있는지 확인하세요.'
+      );
+    }
+
+    const fontBytes =
+      await fontResponse.arrayBuffer();
+
+    /*
+     * ★ 한글 PDF 핵심
+     *
+     * custom font를 embedFont에 넣고
+     * 모든 drawText에 이 font를 사용합니다.
+     *
+     * subset은 false로 둡니다.
+     * 한글 글리프 누락 문제를 피하기 위해
+     * 폰트 전체를 임베드합니다.
+     */
+    const font = await pdfDoc.embedFont(
+      fontBytes,
+      {
+        subset: false,
+      }
+    );
+
+    const page = pdfDoc.getPages()[0];
+
+    // ① 신고자
+    drawText(
+      page,
+      reporterName,
+      PDF_POS.reporterName.x,
+      PDF_POS.reporterName.y,
+      PDF_POS.reporterName.size,
+      font
+    );
+
+    drawText(
+      page,
+      formatPhone(reporterPhone),
+      PDF_POS.reporterPhone.x,
+      PDF_POS.reporterPhone.y,
+      PDF_POS.reporterPhone.size,
+      font
+    );
+
+    // ② 신고 현황
+    drawText(
+      page,
+      siteName,
+      PDF_POS.siteName.x,
+      PDF_POS.siteName.y,
+      PDF_POS.siteName.size,
+      font
+    );
+
+    drawText(
+      page,
+      address,
+      PDF_POS.address.x,
+      PDF_POS.address.y,
+      PDF_POS.address.size,
+      font
+    );
+
+    // ★ 승강기번호 왼쪽 정렬
+    drawText(
+      page,
+      formatElevatorNo(elevatorNo),
+      PDF_POS.elevatorNo.x,
+      PDF_POS.elevatorNo.y,
+      PDF_POS.elevatorNo.size,
+      font
+    );
+
+    // 발생일시
+    drawText(
+      page,
+      occurredYear ? `${occurredYear}년` : '',
+      PDF_POS.occurredYear.x,
+      PDF_POS.occurredYear.y,
+      PDF_POS.occurredYear.size,
+      font
+    );
+
+    drawText(
+      page,
+      occurredMonth ? `${occurredMonth}월` : '',
+      PDF_POS.occurredMonth.x,
+      PDF_POS.occurredMonth.y,
+      PDF_POS.occurredMonth.size,
+      font
+    );
+
+    drawText(
+      page,
+      occurredDay ? `${occurredDay}일` : '',
+      PDF_POS.occurredDay.x,
+      PDF_POS.occurredDay.y,
+      PDF_POS.occurredDay.size,
+      font
+    );
+
+    drawText(
+      page,
+      occurredHour
+        ? `${pad2(occurredHour)}시`
+        : '',
+      PDF_POS.occurredHour.x,
+      PDF_POS.occurredHour.y,
+      PDF_POS.occurredHour.size,
+      font
+    );
+
+    drawText(
+      page,
+      occurredMinute
+        ? `${pad2(occurredMinute)}분`
+        : '',
+      PDF_POS.occurredMinute.x,
+      PDF_POS.occurredMinute.y,
+      PDF_POS.occurredMinute.size,
+      font
+    );
+
+    // ③ 신고내용
+    drawReportEntries(
+      page,
+      reportEntries,
+      font
+    );
+
+    // ④ 원인 / ⑤ 조치
+    drawCauseAndAction(
+      page,
+      cause,
+      action,
+      font
+    );
+
+    return await pdfDoc.save();
+  }
+
+  async function handlePreview() {
+    setGenerating(true);
+
+    try {
+      const bytes = await createPDF();
+
+      const blob = new Blob(
+        [bytes],
+        { type: 'application/pdf' }
+      );
+
+      const url =
+        URL.createObjectURL(blob);
+
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+
+      setPreviewUrl(url);
+    } catch (error: any) {
+      console.error(error);
+
+      alert(
+        error?.message ||
+        'PDF 생성 중 오류가 발생했습니다.'
+      );
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function handleDownload() {
+    setGenerating(true);
+
+    try {
+      const bytes = await createPDF();
+
+      const blob = new Blob(
+        [bytes],
+        { type: 'application/pdf' }
+      );
+
+      const url =
+        URL.createObjectURL(blob);
+
+      const a =
+        document.createElement('a');
+
+      a.href = url;
+
+      a.download =
+        `${siteName || '승객갇힘'}_승객갇힘보고서.pdf`;
+
+      document.body.appendChild(a);
+
+      a.click();
+
+      a.remove();
+
+      setTimeout(
+        () => URL.revokeObjectURL(url),
+        1000
+      );
+    } catch (error: any) {
+      console.error(error);
+
+      alert(
+        error?.message ||
+        'PDF 생성 중 오류가 발생했습니다.'
+      );
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  /* =====================================================
+   * 화면
+   * ===================================================== */
+
+  return (
+    <div className="w-full space-y-6">
+
+      <div className="
+        flex flex-col sm:flex-row
+        sm:items-center sm:justify-between
+        gap-4
+      ">
+        <div>
+          <h1 className="
+            text-2xl sm:text-3xl
+            font-bold text-white
+          ">
+            승객갇힘 보고서 작성
+          </h1>
+
+          <p className="
+            text-sm text-slate-400 mt-2
+          ">
+            현장명, 소재지 또는 승강기 번호를 입력하면
+            바로 아래에 검색 결과가 표시됩니다.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onBack}
+          className="
+            px-4 py-2 rounded-lg
+            bg-slate-800 hover:bg-slate-700
+            text-sm font-semibold
+          "
+        >
+          ← 홈으로
+        </button>
+      </div>
+
+      <div className="
+        rounded-xl border border-slate-800
+        bg-slate-900 p-4
+      ">
+        {loadingSheet ? (
+          <div className="text-sm text-slate-400">
+            현장정보를 불러오는 중...
+          </div>
+        ) : sheetError ? (
+          <div className="text-sm text-red-400">
+            {sheetError}
+          </div>
+        ) : (
+          <div className="text-sm text-emerald-400">
+            ✓ 현장정보 DB 연결 완료
+            {' '}
+            ({rows.length.toLocaleString()}건)
+          </div>
+        )}
+      </div>
+
+      {/* ① 신고자 / ② 신고 현황 */}
+      <div className="
+        grid grid-cols-1 lg:grid-cols-2
+        gap-6
+      ">
+
+        {/* ① 신고자 */}
+        <section className="
+          rounded-2xl border border-slate-800
+          bg-slate-900 p-5 sm:p-6
+        ">
+          <h2 className="
+            text-lg font-bold mb-5
+          ">
+            ① 신고자
+          </h2>
+
+          <div className="space-y-4">
+            <Field
+              label="성명"
+              value={reporterName}
+              onChange={setReporterName}
+              placeholder="신고자 성명"
+            />
+
+            <Field
+              label="연락처"
+              value={reporterPhone}
+              onChange={value =>
+                setReporterPhone(
+                  formatPhone(value)
+                )
+              }
+              placeholder="010-0000-0000"
+              inputMode="numeric"
+              maxLength={13}
+            />
+          </div>
+        </section>
+
+        {/* ② 신고 현황 */}
+        <section className="
+          rounded-2xl border border-slate-800
+          bg-slate-900 p-5 sm:p-6
+        ">
+          <h2 className="
+            text-lg font-bold mb-5
+          ">
+            ② 신고 현황
+          </h2>
+
+          <div className="space-y-4">
+
+            <Autocomplete
+              label="현장명"
+              value={siteName}
+              placeholder="현장명을 입력하세요"
+              options={filterOptions('site', siteName)}
+              active={activeField === 'site'}
+              onFocus={() => setActiveField('site')}
+              onChange={value => {
+                setSiteName(value);
+
+                const found =
+                  findRow('site', value);
+
+                if (found) applyRow(found);
+              }}
+              onSelect={value => {
+                const found =
+                  findRow('site', value);
+
+                if (found) applyRow(found);
+              }}
+            />
+
+            <Autocomplete
+              label="소재지"
+              value={address}
+              placeholder="주소를 입력하세요"
+              options={filterOptions('address', address)}
+              active={activeField === 'address'}
+              onFocus={() => setActiveField('address')}
+              onChange={value => {
+                const normalized =
+                  normalizeAddress(value);
+
+                setAddress(normalized);
+
+                const found =
+                  findRow('address', normalized);
+
+                if (found) applyRow(found);
+              }}
+              onSelect={value => {
+                const found =
+                  findRow('address', value);
+
+                if (found) applyRow(found);
+              }}
+            />
+
+            <Autocomplete
+              label="승강기 번호"
+              value={elevatorNo}
+              placeholder="0000-000"
+              options={filterOptions('elevator', elevatorNo)}
+              active={activeField === 'elevator'}
+              onFocus={() => setActiveField('elevator')}
+              onChange={value => {
+                const formatted =
+                  formatElevatorNo(value);
+
+                setElevatorNo(formatted);
+
+                const found =
+                  findRow('elevator', formatted);
+
+                if (found) applyRow(found);
+              }}
+              onSelect={value => {
+                const found =
+                  findRow('elevator', value);
+
+                if (found) applyRow(found);
+              }}
+            />
+
+            {/* 발생일시 */}
+            <div>
+              <label className="
+                block text-sm font-semibold mb-2
+              ">
+                발생 일시
+              </label>
+
+              {/* 연월일 한 줄 */}
+              <div className="
+                grid grid-cols-3 gap-2
+              ">
+                <Select
+                  value={occurredYear}
+                  onChange={setOccurredYear}
+                  placeholder="연도"
+                  options={Array.from(
+                    { length: 16 },
+                    (_, i) =>
+                      new Date().getFullYear() - 5 + i
+                  ).map(value => ({
+                    value: String(value),
+                    label: `${value}년`,
+                  }))}
+                />
+
+                <Select
+                  value={occurredMonth}
+                  onChange={setOccurredMonth}
+                  placeholder="월"
+                  options={Array.from(
+                    { length: 12 },
+                    (_, i) => i + 1
+                  ).map(value => ({
+                    value: String(value),
+                    label: `${value}월`,
+                  }))}
+                />
+
+                <Select
+                  value={occurredDay}
+                  onChange={setOccurredDay}
+                  placeholder="일"
+                  options={Array.from(
+                    {
+                      length:
+                        occurredYear && occurredMonth
+                          ? daysInMonth(
+                              Number(occurredYear),
+                              Number(occurredMonth)
+                            )
+                          : 31,
+                    },
+                    (_, i) => i + 1
+                  ).map(value => ({
+                    value: String(value),
+                    label: `${value}일`,
+                  }))}
+                />
+              </div>
+
+              {/* 시간 한 줄 */}
+              <div className="
+                grid grid-cols-2 gap-2 mt-2
+              ">
+                <Select
+                  value={occurredHour}
+                  onChange={setOccurredHour}
+                  placeholder="시"
+                  options={Array.from(
+                    { length: 24 },
+                    (_, i) => i
+                  ).map(value => ({
+                    value: String(value),
+                    label: `${pad2(value)}시`,
+                  }))}
+                />
+
+                <Select
+                  value={occurredMinute}
+                  onChange={setOccurredMinute}
+                  placeholder="분"
+                  options={Array.from(
+                    { length: 60 },
+                    (_, i) => i
+                  ).map(value => ({
+                    value: String(value),
+                    label: `${pad2(value)}분`,
+                  }))}
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {/* ③ 신고내용 */}
+      <section className="
+        rounded-2xl border border-slate-800
+        bg-slate-900 p-5 sm:p-6
+      ">
+        <div className="
+          flex items-center justify-between mb-5
+        ">
+          <div>
+            <h2 className="text-lg font-bold">
+              ③ 신고내용
+            </h2>
+
+            <p className="
+              text-xs text-slate-500 mt-1
+            ">
+              시간별로 내용을 추가할 수 있습니다.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={addEntry}
+            className="
+              rounded-lg bg-emerald-700
+              hover:bg-emerald-600
+              px-4 py-2 text-sm font-semibold
+            "
+          >
+            ＋ 시간 추가
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {reportEntries.map((entry, index) => (
+            <div
+              key={entry.id}
+              className="
+                rounded-xl border border-slate-800
+                bg-slate-950 p-4
+              "
+            >
+              <div className="
+                flex items-center justify-between mb-3
+              ">
+                <span className="
+                  text-sm font-semibold
+                ">
+                  내용 {index + 1}
+                </span>
+
+                {reportEntries.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      removeEntry(entry.id)
+                    }
+                    className="
+                      text-xs text-red-400
+                    "
+                  >
+                    삭제
+                  </button>
+                )}
+              </div>
+
+              <div className="
+                grid grid-cols-2
+                sm:grid-cols-[110px_110px_1fr]
+                gap-2
+              ">
+                <Select
+                  value={entry.hour}
+                  onChange={value =>
+                    updateEntry(
+                      entry.id,
+                      'hour',
+                      value
+                    )
+                  }
+                  placeholder="시"
+                  options={Array.from(
+                    { length: 24 },
+                    (_, i) => i
+                  ).map(value => ({
+                    value: String(value),
+                    label: `${pad2(value)}시`,
+                  }))}
+                />
+
+                <Select
+                  value={entry.minute}
+                  onChange={value =>
+                    updateEntry(
+                      entry.id,
+                      'minute',
+                      value
+                    )
+                  }
+                  placeholder="분"
+                  options={Array.from(
+                    { length: 60 },
+                    (_, i) => i
+                  ).map(value => ({
+                    value: String(value),
+                    label: `${pad2(value)}분`,
+                  }))}
+                />
+
+                <textarea
+                  value={entry.content}
+                  onChange={e =>
+                    updateEntry(
+                      entry.id,
+                      'content',
+                      e.target.value
+                    )
+                  }
+                  rows={3}
+                  placeholder="내용을 입력하세요."
+                  className="
+                    col-span-2 sm:col-span-1
+                    w-full rounded-lg
+                    border border-slate-700
+                    bg-slate-950 px-3 py-3
+                    text-sm outline-none
+                    focus:border-blue-500
+                    resize-y
+                  "
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ④ 원인 */}
+      <section className="
+        rounded-2xl border border-slate-800
+        bg-slate-900 p-5 sm:p-6
+      ">
+        <h2 className="
+          text-lg font-bold mb-4
+        ">
+          ④ 원인
+        </h2>
+
+        <textarea
+          value={cause}
+          onChange={e =>
+            setCause(e.target.value)
+          }
+          rows={6}
+          placeholder="원인을 입력하세요."
+          className="
+            w-full rounded-lg
+            border border-slate-700
+            bg-slate-950 px-3 py-3
+            text-sm outline-none
+            focus:border-blue-500
+            resize-y
+          "
+        />
+      </section>
+
+      {/* ⑤ 조치 */}
+      <section className="
+        rounded-2xl border border-slate-800
+        bg-slate-900 p-5 sm:p-6
+      ">
+        <h2 className="
+          text-lg font-bold mb-4
+        ">
+          ⑤ 조치
+        </h2>
+
+        <textarea
+          value={action}
+          onChange={e =>
+            setAction(e.target.value)
+          }
+          rows={6}
+          placeholder="조치내용을 입력하세요."
+          className="
+            w-full rounded-lg
+            border border-slate-700
+            bg-slate-950 px-3 py-3
+            text-sm outline-none
+            focus:border-blue-500
+            resize-y
+          "
+        />
+      </section>
+
+      {/* 버튼 */}
+      <section className="
+        rounded-2xl border border-slate-800
+        bg-slate-900 p-5
+      ">
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            disabled={generating}
+            onClick={handlePreview}
+            className="
+              rounded-lg bg-slate-700
+              hover:bg-slate-600
+              px-5 py-3 font-semibold
+            "
+          >
+            {generating
+              ? '생성 중...'
+              : 'PDF 미리보기'}
+          </button>
+
+          <button
+            type="button"
+            disabled={generating}
+            onClick={handleDownload}
+            className="
+              rounded-lg bg-blue-600
+              hover:bg-blue-500
+              px-5 py-3 font-semibold
+            "
+          >
+            PDF 보고서 다운로드
+          </button>
+        </div>
+      </section>
+
+      {previewUrl && (
+        <section className="
+          rounded-2xl border border-slate-800
+          bg-slate-900 p-3
+        ">
+          <iframe
+            src={previewUrl}
+            title="PDF 미리보기"
+            className="
+              w-full h-[850px]
+              rounded-xl bg-white
+            "
+          />
+        </section>
+      )}
+    </div>
+  );
+}
+
+/* =========================================================
+ * 일반 입력
+ * ========================================================= */
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  inputMode,
+  maxLength,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
+  maxLength?: number;
+}) {
+  return (
+    <div>
+      <label className="
+        block text-sm font-semibold mb-2
+      ">
+        {label}
+      </label>
+
+      <input
+        value={value}
+        onChange={e =>
+          onChange(e.target.value)
+        }
+        placeholder={placeholder}
+        inputMode={inputMode}
+        maxLength={maxLength}
+        className="
+          w-full rounded-lg
+          border border-slate-700
+          bg-slate-950 px-3 py-3
+          text-sm outline-none
+          focus:border-blue-500
+        "
+      />
+    </div>
+  );
+}
+
+/* =========================================================
+ * 자동완성
+ * ========================================================= */
+
+function Autocomplete({
+  label,
+  value,
+  placeholder,
+  options,
+  active,
+  onFocus,
+  onChange,
+  onSelect,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  options: string[];
+  active: boolean;
+  onFocus: () => void;
+  onChange: (value: string) => void;
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <div className="relative">
+      <label className="
+        block text-sm font-semibold mb-2
+      ">
+        {label}
+      </label>
+
+      <input
+        value={value}
+        onFocus={onFocus}
+        onChange={e =>
+          onChange(e.target.value)
+        }
+        placeholder={placeholder}
+        autoComplete="off"
+        className="
+          w-full rounded-lg
+          border border-slate-700
+          bg-slate-950 px-3 py-3
+          text-sm outline-none
+          focus:border-blue-500
+        "
+      />
+
+      {active && options.length > 0 && (
+        <div className="
+          absolute z-50
+          left-0 right-0 top-full mt-1
+          max-h-64 overflow-y-auto
+          rounded-lg
+          border border-slate-700
+          bg-slate-900
+          shadow-2xl
+        ">
+          {options.map((option, index) => (
+            <button
+              key={`${option}-${index}`}
+              type="button"
+              onMouseDown={e =>
+                e.preventDefault()
+              }
+              onClick={() =>
+                onSelect(option)
+              }
+              className="
+                block w-full
+                px-3 py-3
+                text-left text-sm
+                border-b border-slate-800
+                hover:bg-slate-800
+              "
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* =========================================================
+ * Select
+ * ========================================================= */
+
+function Select({
+  value,
+  onChange,
+  placeholder,
+  options,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  options: {
+    value: string;
+    label: string;
+  }[];
+}) {
+  return (
+    <select
+      value={value}
+      onChange={e =>
+        onChange(e.target.value)
+      }
+      className="
+        w-full rounded-lg
+        border border-slate-700
+        bg-slate-950 px-3 py-3
+        text-sm outline-none
+        focus:border-blue-500
+      "
+    >
+      <option value="">
+        {placeholder}
+      </option>
+
+      {options.map(option => (
+        <option
+          key={option.value}
+          value={option.value}
+        >
+          {option.label}
+        </option>
+      ))}
+    </select>
+  );
 }

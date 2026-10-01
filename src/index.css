@@ -1,16 +1,1 @@
 @import "tailwindcss";
-
-
-/* 모바일에서 두 번 터치/입력 중 화면 확대 방지 */
-html, body, #root {
-  touch-action: manipulation;
-}
-
-/* iPhone Safari가 입력창에 포커스할 때 자동 확대하지 않도록 16px 유지 */
-input, textarea, select {
-  font-size: 16px !important;
-}
-
-button, a {
-  touch-action: manipulation;
-}
