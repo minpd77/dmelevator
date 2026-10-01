@@ -7,7 +7,7 @@ export const INITIAL_SITES: Site[] = [
   {
     id: 'site-2',
     name: '현장지도',
-    description: '',
+    description: '현장 위치와 승강기 정보를 지도에서 확인합니다.',
     category: '업무',
     siteUrl: 'https://minpd77.github.io/DMEL/map2.html',
     icon: 'building',
@@ -17,7 +17,7 @@ export const INITIAL_SITES: Site[] = [
   {
     id: 'site-3',
     name: '신고 및 보고 양식',
-    description: '',
+    description: '고장 및 민원 신고·보고 양식을 작성합니다.',
     category: '고장',
     siteUrl: '#report-form',
     icon: 'file-text',
@@ -27,7 +27,7 @@ export const INITIAL_SITES: Site[] = [
   {
     id: 'site-cal',
     name: '일정 캘린더',
-    description: '',
+    description: '검사 및 점검 일정을 한눈에 확인합니다.',
     category: '일정',
     siteUrl: '#calendar',
     icon: 'calendar',
@@ -37,7 +37,7 @@ export const INITIAL_SITES: Site[] = [
   {
     id: 'site-1',
     name: '현장 검사조건부 조회',
-    description: '',
+    description: '검사 결과와 조건부 내용을 빠르게 조회합니다.',
     category: '검사',
     siteUrl: '#inspection-db',
     icon: 'wrench',

@@ -1,1 +1,20 @@
 @import "tailwindcss";
+
+
+/* 모바일에서 더블탭/입력창 자동 확대 방지 */
+html, body, #root {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+}
+
+button, a, input, textarea, select {
+  touch-action: manipulation;
+}
+
+@media (max-width: 768px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
