@@ -100,6 +100,44 @@ const SEOUL_DISTRICTS = [
    주소
 ========================================================= */
 
+const GYEONGGI_CITIES = [
+  '수원시',
+  '성남시',
+  '용인시',
+  '부천시',
+  '안산시',
+  '안양시',
+  '평택시',
+  '시흥시',
+  '화성시',
+  '광명시',
+  '군포시',
+  '광주시',
+  '김포시',
+  '이천시',
+  '안성시',
+  '하남시',
+  '의왕시',
+  '오산시',
+  '구리시',
+  '의정부시',
+  '남양주시',
+  '파주시',
+  '양주시',
+  '포천시',
+  '동두천시',
+  '과천시',
+  '여주시',
+  '양평군',
+  '가평군',
+  '연천군'
+];
+
+
+/* =========================================================
+   주소
+========================================================= */
+
 function normalizeAddress(
   value: string
 ): string {
@@ -109,33 +147,22 @@ function normalizeAddress(
       .replace(/\s+/g, ' ')
       .trim();
 
-
   if (!address) {
-
     return '';
-
   }
-
 
   /*
    * 이미 서울특별시
    */
-
   if (
-    address.startsWith(
-      '서울특별시'
-    )
+    address.startsWith('서울특별시')
   ) {
-
     return address;
-
   }
-
 
   /*
    * 서울시 / 서울
    */
-
   if (
     address.startsWith('서울시 ') ||
     address === '서울시' ||
@@ -144,29 +171,16 @@ function normalizeAddress(
 
     address =
       address
-        .replace(
-          /^서울시\s*/,
-          ''
-        )
-        .replace(
-          /^서울\s*/,
-          ''
-        )
+        .replace(/^서울시\s*/, '')
+        .replace(/^서울\s*/, '')
         .trim();
 
-
-    return (
-      '서울특별시 ' +
-      address
-    );
-
+    return '서울특별시 ' + address;
   }
-
 
   /*
    * 서울 25개 구
    */
-
   for (
     const district
     of SEOUL_DISTRICTS
@@ -174,27 +188,43 @@ function normalizeAddress(
 
     if (
       address === district ||
-      address.startsWith(
-        district + ' '
-      )
+      address.startsWith(district + ' ')
     ) {
 
-      return (
-        '서울특별시 ' +
-        address
-      );
-
+      return '서울특별시 ' + address;
     }
-
   }
 
+  /*
+   * 이미 경기도
+   */
+  if (
+    address.startsWith('경기도')
+  ) {
+    return address;
+  }
+
+  /*
+   * 경기 / 경기도 없이 시·군으로 시작하는 주소
+   */
+  for (
+    const city
+    of GYEONGGI_CITIES
+  ) {
+
+    if (
+      address === city ||
+      address.startsWith(city + ' ')
+    ) {
+
+      return '경기도 ' + address;
+    }
+  }
 
   /*
    * 그 외 지역
    */
-
   return address;
-
 }
 
 
@@ -641,38 +671,28 @@ function formatDateTime(
 ): string {
 
   if (!value) {
-
     return '';
-
   }
-
 
   const date =
     new Date(value);
-
 
   if (
     Number.isNaN(
       date.getTime()
     )
   ) {
-
     return value;
-
   }
-
 
   const year =
     date.getFullYear();
 
-
   const month =
     date.getMonth() + 1;
 
-
   const day =
     date.getDate();
-
 
   const hour =
     String(
@@ -682,7 +702,6 @@ function formatDateTime(
       '0'
     );
 
-
   const minute =
     String(
       date.getMinutes()
@@ -691,12 +710,84 @@ function formatDateTime(
       '0'
     );
 
-
   return (
-    `${year}년 ${month}월 ${day}일 ` +
-    `${hour}:${minute} 경`
+    `${year}년 ${month}월 ${day}일 ${hour}시 ${minute}분`
   );
+}
 
+
+/* =========================================================
+   발생일시 일정 간격 출력
+========================================================= */
+
+function drawDateTime(
+  page: any,
+  value: string,
+  x: number,
+  y: number,
+  size: number,
+  font: any
+) {
+
+  if (!value) {
+    return;
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    drawText(
+      page,
+      value,
+      x,
+      y,
+      size,
+      font
+    );
+
+    return;
+  }
+
+  const parts = [
+    `${date.getFullYear()}년`,
+    `${date.getMonth() + 1}월`,
+    `${date.getDate()}일`,
+    `${String(date.getHours()).padStart(2, '0')}시`,
+    `${String(date.getMinutes()).padStart(2, '0')}분`
+  ];
+
+  let currentX = x;
+
+  /*
+   * 글자 1개 정도 간격
+   */
+  const gap = 8;
+
+  for (
+    const part
+    of parts
+  ) {
+
+    drawText(
+      page,
+      part,
+      currentX,
+      y,
+      size,
+      font
+    );
+
+    currentX +=
+      font.widthOfTextAtSize(
+        part,
+        size
+      ) + gap;
+  }
 }
 
 
@@ -1400,14 +1491,36 @@ export function TrappedReportSection({
     );
 
 
-    drawText(
-      page,
-      address,
-      282,
-      560,
-      10,
-      font
-    );
+    /*
+     * 주소
+     * 길어지면 자동 줄바꿈
+     */
+    const addressLines =
+      wrapText(
+        address,
+        font,
+        9,
+        275
+      );
+
+    let addressY = 568;
+
+    for (
+      const line
+      of addressLines.slice(0, 2)
+    ) {
+
+      drawText(
+        page,
+        line,
+        282,
+        addressY,
+        9,
+        font
+      );
+
+      addressY -= 12;
+    }
 
 
     drawText(
@@ -1422,14 +1535,12 @@ export function TrappedReportSection({
     );
 
 
-    drawText(
+    drawDateTime(
       page,
-      formatDateTime(
-        occurredAt
-      ),
+      occurredAt,
       300,
       515,
-      10,
+      9,
       font
     );
 
