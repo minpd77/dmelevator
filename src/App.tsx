@@ -574,112 +574,88 @@ export default function App() {
             ================================================= */}
 
             <section
-              aria-label="갇힘보고서"
+              aria-label="갇힘보고서 및 국가승강기정보센터"
+              className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6"
             >
 
+              {/* 갇힘보고서 */}
               <button
                 type="button"
                 onClick={
                   navigateToTrappedReport
                 }
                 className="
-                  w-full
-                  text-left
-                  rounded-2xl
-                  border
-                  border-slate-800
-                  bg-slate-900
-                  hover:bg-slate-800
-                  hover:border-blue-600
-                  transition-all
-                  duration-200
-                  p-5
-                  sm:p-6
-                  shadow-lg
-                  group
+                  w-full text-left rounded-2xl border border-slate-800
+                  bg-slate-900 hover:bg-slate-800 hover:border-blue-600
+                  transition-all duration-200 p-5 sm:p-6 shadow-lg group
                 "
               >
-
-                <div
-                  className="
-                    flex
-                    items-center
-                    justify-between
-                    gap-4
-                  "
-                >
-
-                  <div>
-
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
                     <div
                       className="
-                        flex
-                        items-center
-                        gap-3
+                        w-11 h-11 rounded-xl bg-red-600/15
+                        border border-red-500/20 flex items-center
+                        justify-center text-xl shrink-0
                       "
                     >
-
-                      <div
-                        className="
-                          w-11
-                          h-11
-                          rounded-xl
-                          bg-red-600/15
-                          border
-                          border-red-500/20
-                          flex
-                          items-center
-                          justify-center
-                          text-xl
-                        "
-                      >
-                        🚨
-                      </div>
-
-                      <div>
-
-                        <h2
-                          className="
-                            text-lg
-                            sm:text-xl
-                            font-bold
-                            text-white
-                          "
-                        >
-                          갇힘보고서
-                        </h2>
-
-                        <p
-                          className="
-                            text-sm
-                            text-slate-400
-                            mt-1
-                          "
-                        >
-                          승객갇힘 보고서를 작성하고 PDF로 저장합니다.
-                        </p>
-
-                      </div>
-
+                      🚨
                     </div>
 
+                    <div className="min-w-0">
+                      <h2 className="text-lg sm:text-xl font-bold text-white">
+                        갇힘보고서
+                      </h2>
+                      <p className="text-sm text-slate-400 mt-1">
+                        승객갇힘·승객사고 보고서를 작성하고 PDF로 저장합니다.
+                      </p>
+                    </div>
                   </div>
 
-
-                  <div
-                    className="
-                      text-slate-500
-                      group-hover:text-blue-400
-                      text-xl
-                      transition-colors
-                    "
-                  >
+                  <div className="text-slate-500 group-hover:text-blue-400 text-xl transition-colors shrink-0">
                     →
                   </div>
-
                 </div>
-
               </button>
+
+              {/* 국가승강기정보센터 */}
+              <a
+                href="https://www.elevator.go.kr/opn/dec/DecPrvcyChkAgrmnt.do?wccPrm=s4KKuwE0iGU1yIU4iiDy8grl9O0A93Wk0svsQVVUC3ZtDi8hdAtyDuT9uVpkGdGPqRZyAEaVag7VsQLbusHN5Lt%2BAxdr5qVbaeWARxMC2QdyBnX9sXutmbFia1MxEX8P09e6LS%2FMfkBw%2BIEqvOc%2B%2B3UwYQkiRFlrMlcc5MpNeiw%3D"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="
+                  group block w-full text-left rounded-2xl border border-slate-800
+                  bg-slate-900 hover:bg-slate-800 hover:border-blue-600
+                  transition-all duration-200 p-5 sm:p-6 shadow-lg
+                "
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className="
+                        w-11 h-11 rounded-xl bg-blue-600/15
+                        border border-blue-500/20 flex items-center
+                        justify-center text-xl shrink-0
+                      "
+                    >
+                      🏢
+                    </div>
+
+                    <div className="min-w-0">
+                      <h2 className="text-lg sm:text-xl font-bold text-white group-hover:text-blue-400 transition-colors">
+                        국가승강기정보센터
+                      </h2>
+                      <p className="text-sm text-slate-400 mt-1">
+                        승강기 고장/사고 신고
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-slate-500 group-hover:text-blue-400 text-xl transition-colors shrink-0">
+                    ↗
+                  </div>
+                </div>
+              </a>
 
             </section>
 

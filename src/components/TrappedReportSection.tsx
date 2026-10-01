@@ -87,6 +87,15 @@ const PDF_POS = {
     gap: 9,
   },
 
+  // 상단 '승객갇힘 / 승객사고' 대괄호 안 체크 위치
+  reportTypeCheck: {
+    trappedX: 228,
+    trappedY: 673,
+    accidentX: 228,
+    accidentY: 649,
+    size: 13,
+  },
+
   reportTime: {
     x: 129,
     y: 465,
@@ -481,6 +490,11 @@ export function TrappedReportSection({ onBack }: Props) {
   const [reporterName, setReporterName] = useState('');
   const [reporterPhone, setReporterPhone] = useState('');
 
+  // 신고 구분: 둘 중 정확히 1개만 선택
+  const [reportType, setReportType] = useState<
+    'passenger-trapped' | 'passenger-accident'
+  >('passenger-trapped');
+
   // ② 신고 현황
   const [siteName, setSiteName] = useState('');
   const [address, setAddress] = useState('');
@@ -783,6 +797,27 @@ export function TrappedReportSection({ onBack }: Props) {
 
     const page = pdfDoc.getPages()[0];
 
+    // 상단 신고 구분 대괄호에는 선택한 1개만 체크 표시
+    if (reportType === 'passenger-trapped') {
+      drawText(
+        page,
+        '✓',
+        PDF_POS.reportTypeCheck.trappedX,
+        PDF_POS.reportTypeCheck.trappedY,
+        PDF_POS.reportTypeCheck.size,
+        font
+      );
+    } else {
+      drawText(
+        page,
+        '✓',
+        PDF_POS.reportTypeCheck.accidentX,
+        PDF_POS.reportTypeCheck.accidentY,
+        PDF_POS.reportTypeCheck.size,
+        font
+      );
+    }
+
     // ① 신고자
     drawText(
       page,
@@ -929,8 +964,13 @@ export function TrappedReportSection({ onBack }: Props) {
 
       a.href = url;
 
+      const reportTypeName =
+        reportType === 'passenger-accident'
+          ? '승객사고'
+          : '승객갇힘';
+
       a.download =
-        `${siteName || '승객갇힘'}_승객갇힘보고서.pdf`;
+        `${siteName || reportTypeName}_${reportTypeName}보고서.pdf`;
 
       document.body.appendChild(a);
 
@@ -1053,6 +1093,39 @@ export function TrappedReportSection({ onBack }: Props) {
               inputMode="numeric"
               maxLength={13}
             />
+
+            {/* 신고 구분: 라디오 버튼이라 반드시 1개만 선택됩니다. */}
+            <div>
+              <label className="block text-sm font-semibold mb-2">
+                신고 구분
+              </label>
+
+              <div className="flex flex-wrap gap-5">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="radio"
+                    name="reportType"
+                    value="passenger-trapped"
+                    checked={reportType === 'passenger-trapped'}
+                    onChange={() => setReportType('passenger-trapped')}
+                    className="h-4 w-4 accent-blue-500"
+                  />
+                  <span className="text-sm">승객갇힘</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="radio"
+                    name="reportType"
+                    value="passenger-accident"
+                    checked={reportType === 'passenger-accident'}
+                    onChange={() => setReportType('passenger-accident')}
+                    className="h-4 w-4 accent-blue-500"
+                  />
+                  <span className="text-sm">승객사고</span>
+                </label>
+              </div>
+            </div>
           </div>
         </section>
 
