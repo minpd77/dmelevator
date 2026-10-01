@@ -79,34 +79,12 @@ const PDF_POS = {
     size: 12,
   },
 
-  occurredYear: {
+  // 발생일시는 하나의 흐름으로 그려서 연/월/일/시/분 사이 간격을 일정하게 유지합니다.
+  occurredDateTime: {
     x: 335,
     y: 516,
     size: 12,
-  },
-
-  occurredMonth: {
-    x: 377,
-    y: 516,
-    size: 12,
-  },
-
-  occurredDay: {
-    x: 400,
-    y: 516,
-    size: 12,
-  },
-
-  occurredHour: {
-    x: 450,
-    y: 516,
-    size: 12,
-  },
-
-  occurredMinute: {
-    x: 485,
-    y: 516,
-    size: 12,
+    gap: 9,
   },
 
   reportTime: {
@@ -177,6 +155,36 @@ function normalizeAddress(value: string) {
       .replace(/^서울시\s*/, '')
       .replace(/^서울\s*/, '')
       .trim()}`;
+  }
+
+  // 경기도가 빠져 있는 주소도 자동으로 '경기도'를 붙입니다.
+  // 예: '수원시 팔달구 ...' → '경기도 수원시 팔달구 ...'
+  // 예: '경기 수원시 ...' → '경기도 수원시 ...'
+  if (address.startsWith('경기도 ')) {
+    return address;
+  }
+
+  if (address.startsWith('경기 ')) {
+    return `경기도 ${address.replace(/^경기\s*/, '').trim()}`;
+  }
+
+  const gyeonggiCities = [
+    '수원시', '성남시', '고양시', '용인시', '부천시',
+    '안산시', '안양시', '남양주시', '화성시', '평택시',
+    '의정부시', '시흥시', '파주시', '광명시', '김포시',
+    '군포시', '광주시', '이천시', '양주시', '오산시',
+    '구리시', '안성시', '포천시', '의왕시', '하남시',
+    '여주시', '동두천시', '과천시', '가평군', '양평군',
+    '연천군',
+  ];
+
+  if (
+    gyeonggiCities.some(
+      city =>
+        address === city || address.startsWith(`${city} `)
+    )
+  ) {
+    return `경기도 ${address}`;
   }
 
   const districts = [
@@ -824,54 +832,34 @@ export function TrappedReportSection({ onBack }: Props) {
     );
 
     // 발생일시
-    drawText(
-      page,
+    // 연/월/일/시/분을 하나의 흐름으로 그려 각 항목 사이 간격을 동일하게 맞춥니다.
+    const occurredParts = [
       occurredYear ? `${occurredYear}년` : '',
-      PDF_POS.occurredYear.x,
-      PDF_POS.occurredYear.y,
-      PDF_POS.occurredYear.size,
-      font
-    );
-
-    drawText(
-      page,
       occurredMonth ? `${occurredMonth}월` : '',
-      PDF_POS.occurredMonth.x,
-      PDF_POS.occurredMonth.y,
-      PDF_POS.occurredMonth.size,
-      font
-    );
-
-    drawText(
-      page,
       occurredDay ? `${occurredDay}일` : '',
-      PDF_POS.occurredDay.x,
-      PDF_POS.occurredDay.y,
-      PDF_POS.occurredDay.size,
-      font
-    );
+      occurredHour ? `${pad2(occurredHour)}시` : '',
+      occurredMinute ? `${pad2(occurredMinute)}분` : '',
+    ].filter(Boolean);
 
-    drawText(
-      page,
-      occurredHour
-        ? `${pad2(occurredHour)}시`
-        : '',
-      PDF_POS.occurredHour.x,
-      PDF_POS.occurredHour.y,
-      PDF_POS.occurredHour.size,
-      font
-    );
+    let occurredX = PDF_POS.occurredDateTime.x;
 
-    drawText(
-      page,
-      occurredMinute
-        ? `${pad2(occurredMinute)}분`
-        : '',
-      PDF_POS.occurredMinute.x,
-      PDF_POS.occurredMinute.y,
-      PDF_POS.occurredMinute.size,
-      font
-    );
+    occurredParts.forEach((part) => {
+      drawText(
+        page,
+        part,
+        occurredX,
+        PDF_POS.occurredDateTime.y,
+        PDF_POS.occurredDateTime.size,
+        font
+      );
+
+      occurredX +=
+        font.widthOfTextAtSize(
+          part,
+          PDF_POS.occurredDateTime.size
+        ) +
+        PDF_POS.occurredDateTime.gap;
+    });
 
     // ③ 신고내용
     drawReportEntries(
