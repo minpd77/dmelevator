@@ -1,84 +1,20 @@
-<!DOCTYPE html>
-<html lang="ko" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>테마 모드 변경 데모</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        // Tailwind dark mode 설정 (class 기반)
-        tailwind.config = {
-            darkMode: 'class',
-        }
-    </script>
-</head>
-<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 min-h-screen transition-colors duration-300 font-sans">
-
-    <!-- 상단 헤더 & 테마 토글 버튼 -->
-    <header class="p-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center max-w-4xl mx-auto">
-        <h1 class="text-xl font-bold">다크 / 라이트 모드 데모</h1>
-        
-        <!-- 테마 토글 버튼 -->
-        <button id="theme-toggle" type="button" class="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors">
-            <!-- 해 아이콘 (라이트 모드로 전환 시 표시) -->
-            <svg id="theme-toggle-light-icon" class="hidden w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 100 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path>
-            </svg>
-            <!-- 달 아이콘 (다크 모드로 전환 시 표시) -->
-            <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5 text-gray-700 dark:text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
-            </svg>
-            <span id="theme-toggle-text">모드 변경</span>
-        </button>
-    </header>
-
-    <!-- 메인 컨텐츠 영역 -->
-    <main class="max-w-4xl mx-auto p-6 mt-8">
-        <section class="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 transition-colors">
-            <h2 class="text-2xl font-semibold mb-4">화면 모드 변경 안내</h2>
-            <p class="leading-relaxed mb-4 text-gray-600 dark:text-gray-300">
-                우측 상단의 버튼을 누르면 **라이트 모드**와 **다크 모드**를 자유롭게 전환할 수 있습니다.
-            </p>
-            <div class="p-4 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
-                <p class="text-sm font-mono text-blue-600 dark:text-blue-400">
-                    현재 설정된 테마는 브라우저의 localStorage에 저장되어 페이지를 새로고침해도 유지됩니다.
-                </p>
-            </div>
-        </section>
-    </main>
-
-    <!-- 스크립트: 테마 상태 관리 및 토글 기능 -->
-    <script>
-        const themeToggleBtn = document.getElementById('theme-toggle');
-        const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
-        const themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
-
-        // 초기 테마 설정 확인 (localStorage 우선, 없으면 기본 다크 모드)
-        if (localStorage.getItem('color-theme') === 'light') {
-            document.documentElement.classList.remove('dark');
-            themeToggleDarkIcon.classList.remove('hidden');
-        } else {
-            // 기본값을 다크 모드로 설정
-            document.documentElement.classList.add('dark');
-            themeToggleLightIcon.classList.remove('hidden');
-        }
-
-        // 버튼 클릭 이벤트 핸들러
-        themeToggleBtn.addEventListener('click', function() {
-            // 아이콘 토글
-            themeToggleDarkIcon.classList.toggle('hidden');
-            themeToggleLightIcon.classList.toggle('hidden');
-
-            // html 클래스 및 localStorage 업데이트
-            if (document.documentElement.classList.contains('dark')) {
-                document.documentElement.classList.remove('dark');
-                localStorage.setItem('color-theme', 'light');
-            } else {
-                document.documentElement.classList.add('dark');
-                localStorage.setItem('color-theme', 'dark');
-            }
-        });
-    </script>
-</body>
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>대명엘리베이터</title>
+    <meta name="description" content="승강기 주요 업무 바로가기, 구글 스프레드시트 DB 실시간 추출 조회 및 검사·점검 일정 포털" />
+    <meta property="og:title" content="대명엘리베이터" />
+    <meta property="og:description" content="승강기 주요 업무 바로가기, 구글 스프레드시트 DB 실시간 추출 조회 및 검사·점검 일정 포털" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+  </head>
+  <body class="bg-slate-950 text-slate-100 antialiased font-sans">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
+
