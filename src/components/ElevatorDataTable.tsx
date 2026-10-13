@@ -155,6 +155,28 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
     return normalizeDateTime(raw);
   };
 
+  // 검사일시 필터의 기준일은 한국 시간(KST) 오늘이다.
+  // 전체 리스트에는 적용하지 않고, 검사일시 빠른순/늦은순 필터에만 적용한다.
+  const getTodayKST = (): string => {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date());
+    const year = parts.find((part) => part.type === 'year')?.value || '';
+    const month = parts.find((part) => part.type === 'month')?.value || '';
+    const day = parts.find((part) => part.type === 'day')?.value || '';
+    return `${year}-${month}-${day}`;
+  };
+
+  const isInspectionTodayOrFuture = (rec: ElevatorRecord): boolean => {
+    const key = getInspectionSortKey(rec);
+    const datePart = key.slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return false;
+    return datePart >= getTodayKST();
+  };
+
   // Count records with inspection date & time
   const scheduledTimeCount = useMemo(() => {
     return records.filter((r) => hasInspectionTime(r)).length;
@@ -218,15 +240,17 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
       });
     } else if (sortOrder === 'INSPECTION_ASC') {
       // "검사일시/구분 필터 누르면 빠른순인데 날짜만 있는건 제외하고 시간이 같이 있는것만 빠른순으로"
-      // Only keep records where inspectionDate has both date and time (ex: "2026-09-15 14:00")
-      const withTimeOnly = filtered.filter((r) => hasInspectionTime(r));
+      // 검사일시 필터에서는 오늘(KST) 또는 미래 날짜 중 시간까지 있는 일정만 표시한다.
+      // 전체 리스트 및 마감일 정렬에는 이 날짜 기준을 적용하지 않는다.
+      const withTimeOnly = filtered.filter((r) => hasInspectionTime(r) && isInspectionTodayOrFuture(r));
       return withTimeOnly.sort((a, b) => {
         const keyA = getInspectionSortKey(a);
         const keyB = getInspectionSortKey(b);
         return keyA.localeCompare(keyB);
       });
     } else if (sortOrder === 'INSPECTION_DESC') {
-      const withTimeOnly = filtered.filter((r) => hasInspectionTime(r));
+      // 늦은순도 동일하게 오늘(KST) 이전 검사일은 제외한다.
+      const withTimeOnly = filtered.filter((r) => hasInspectionTime(r) && isInspectionTodayOrFuture(r));
       return withTimeOnly.sort((a, b) => {
         const keyA = getInspectionSortKey(a);
         const keyB = getInspectionSortKey(b);
@@ -381,17 +405,17 @@ export const ElevatorDataTable: React.FC<ElevatorDataTableProps> = ({
                   ? 'bg-blue-950/50 text-blue-400 border-blue-800'
                   : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
               }`}
-              title="검사일시 정렬 전환 (시간포함된 빠른순 / 늦은순 / 기본)"
+              title="검사일시 필터: 오늘(KST) 이후 일정만 빠른순/늦은순으로 표시. 기본순에서는 전체 데이터를 표시합니다."
             >
               {sortOrder === 'INSPECTION_ASC' ? (
                 <>
                   <ArrowUp className="w-3.5 h-3.5 text-blue-400" />
-                  <span>검사일시 빠른순</span>
+                  <span>오늘 이후 빠른순</span>
                 </>
               ) : sortOrder === 'INSPECTION_DESC' ? (
                 <>
                   <ArrowDown className="w-3.5 h-3.5 text-blue-400" />
-                  <span>검사일시 늦은순</span>
+                  <span>오늘 이후 늦은순</span>
                 </>
               ) : (
                 <>

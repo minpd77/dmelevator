@@ -18,8 +18,8 @@ export const SHEET2_SHEET_GID = '1183872898';
 export const MAP_SPREADSHEET_ID = '1dD2B5Iro2WBPurXrZZAf_pbsbSzoxT96sWztvM8HzA8';
 export const MAP_SHEET_GID = '381852124';
 
-const CACHE_KEY = 'daemyung_elevator_db_cache_v5_q_aa_full';
-const CACHE_TIME_KEY = 'daemyung_elevator_db_cache_time_v5';
+const CACHE_KEY = 'daemyung_elevator_db_cache_v6_light_filter_refresh';
+const CACHE_TIME_KEY = 'daemyung_elevator_db_cache_time_v6';
 
 // Format helper for Date(...) string from Google gviz
 function formatGvizValue(cell: any): string {

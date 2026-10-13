@@ -66,3 +66,47 @@ html.light-theme select {
   color: #0f172a;
   border-color: #cbd5e1;
 }
+
+/* 라이트 모드 가독성 보강: 다크 테마용 흰색 글자와 투명 텍스트를 어두운 글자로 전환 */
+html.light-theme .text-white,
+html.light-theme [class~="text-white"],
+html.light-theme [class*="text-white/"] {
+  color: #0f172a !important;
+}
+html.light-theme [class*="text-slate-50"],
+html.light-theme [class*="text-gray-50"],
+html.light-theme [class*="text-gray-100"],
+html.light-theme [class*="text-gray-200"],
+html.light-theme [class*="text-gray-300"] {
+  color: #334155 !important;
+}
+html.light-theme [class*="text-gray-400"],
+html.light-theme [class*="text-gray-500"],
+html.light-theme [class*="text-slate-600"] {
+  color: #475569 !important;
+}
+html.light-theme [class*="placeholder-white"]::placeholder,
+html.light-theme [class*="placeholder-slate-300"]::placeholder,
+html.light-theme [class*="placeholder-slate-400"]::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+}
+/* 카드/버튼이 다크 모드용 반투명 흰 글자색을 쓰는 경우에도 읽을 수 있게 보정 */
+html.light-theme .opacity-50,
+html.light-theme .opacity-60,
+html.light-theme .opacity-70 {
+  opacity: 1 !important;
+}
+html.light-theme button,
+html.light-theme a,
+html.light-theme label,
+html.light-theme p,
+html.light-theme h1,
+html.light-theme h2,
+html.light-theme h3,
+html.light-theme h4,
+html.light-theme li,
+html.light-theme td,
+html.light-theme th {
+  text-shadow: none;
+}
