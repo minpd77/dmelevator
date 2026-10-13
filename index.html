@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://cdn.jsdelivr.net" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
     <script>
-      // 초기 로딩 시 테마 깜빡임 방지
+      // 초기 로딩 시 localStorage 체크 (화면 깜빡임 방지)
       if (localStorage.getItem('theme') === 'light') {
         document.documentElement.classList.remove('dark');
       } else {
@@ -20,7 +20,7 @@
       }
     </script>
   </head>
-  <body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased font-sans transition-colors duration-300">
+  <body class="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased font-sans transition-colors duration-300">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
