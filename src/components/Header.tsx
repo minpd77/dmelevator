@@ -1,5 +1,6 @@
 import React from 'react';
 import { Calendar, ArrowLeft, Database } from 'lucide-react';
+import ThemeToggle from './ThemeToggle';
 
 interface HeaderProps {
   currentView?: 'home' | 'inspection-db' | 'calendar' | 'report-form' | 'trapped-report';
@@ -56,6 +57,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Action buttons (Top-Right) */}
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             {currentView !== 'home' ? (
               <button
                 id="btn-header-back"
